@@ -133,7 +133,7 @@
     <div class="grid">
       <div class="card twoThird">
         <div class="sectionTitle">
-          <div><h2>Remaining group fixtures</h2><div class="muted">Completed matches load live results. Remaining fixtures default to market-implied favourites. Edit any predicted score.</div></div>
+          <div><h2>Group fixtures</h2><div class="muted">Matchday 1 &amp; 2 results for most groups are already applied. Load live scores to fetch today's remaining results. Edit any score to adjust projections.</div></div>
           <div class="toolbar"><button class="secondary" id="sampleBtn">Load odds + live scores</button><button class="danger" id="resetBtn">Reset</button><span class="saveStatus" id="saveStatus"></span></div>
           <div class="oddsStatus muted small" style="margin-top:4px;width:100%"></div>
         </div>
@@ -156,7 +156,7 @@
 
   <section id="tables" class="page">
     <div class="grid">
-      <div class="card"><div class="sectionTitle"><div><h2>Group tables</h2><div class="muted">Updates live from your fixture scores. Top two qualify automatically. Best eight third-placed teams also advance.</div></div></div></div>
+      <div class="card"><div class="sectionTitle"><div><h2>Group tables</h2><div class="muted">Projected final group standings including predicted remaining fixtures. Top two qualify automatically. Best eight third-placed teams also advance.</div></div></div></div>
       <div id="groupCards" class="grid" style="grid-column:span 12"></div>
       <div class="card"><h2>Third-place ranking</h2><div id="thirdTable"></div></div>
     </div>
@@ -214,7 +214,7 @@ const flags={
   'Portugal':'🇵🇹','Colombia':'🇨🇴','Congo DR':'🇨🇩','Uzbekistan':'🇺🇿',
   'England':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Croatia':'🇭🇷','Ghana':'🇬🇭','Panama':'🇵🇦'
 };
-function withFlag(t){ return t&&flags[t]?flags[t]+' '+t:t; }
+function withFlag(t){ return t&&flags[t]?flags[t]+' '+t:t; }
 
 const ODDS_DATE = '23 Jun 2026';
 let oddsLastFetched = null;
@@ -248,7 +248,7 @@ const groups = {
   L:['England','Croatia','Ghana','Panama']
 };
 const fixtures = [
-  ['2026-06-23','L','England','Ghana'],['2026-06-23','L','Panama','Croatia'],['2026-06-23','K','Portugal','Uzbekistan'],['2026-06-23','K','Colombia','Congo DR'],
+  ['2026-06-23','L','Panama','Croatia'],['2026-06-23','K','Colombia','Congo DR'],
   ['2026-06-24','C','Scotland','Brazil'],['2026-06-24','C','Morocco','Haiti'],['2026-06-24','B','Switzerland','Canada'],['2026-06-24','B','Bosnia and Herzegovina','Qatar'],['2026-06-24','A','Czechia','Mexico'],['2026-06-24','A','South Africa','Korea Republic'],
   ['2026-06-25','E','Curaçao','Côte d\'Ivoire'],['2026-06-25','E','Ecuador','Germany'],['2026-06-25','F','Japan','Sweden'],['2026-06-25','F','Tunisia','Netherlands'],['2026-06-25','D','Türkiye','USA'],['2026-06-25','D','Paraguay','Australia'],
   ['2026-06-26','I','Norway','France'],['2026-06-26','I','Senegal','Iraq'],['2026-06-26','G','Egypt','IR Iran'],['2026-06-26','G','New Zealand','Belgium'],['2026-06-26','H','Cabo Verde','Saudi Arabia'],['2026-06-26','H','Uruguay','Spain'],
@@ -270,12 +270,12 @@ function applyCurrentBaseline(){
   setBase('Spain',2,4,4,0); setBase('Cabo Verde',2,2,2,2); setBase('Uruguay',2,2,3,3); setBase('Saudi Arabia',2,1,1,5);
   setBase('France',2,6,6,1); setBase('Norway',2,6,7,3); setBase('Senegal',2,0,3,6); setBase('Iraq',2,0,1,7);
   setBase('Argentina',2,6,5,0); setBase('Algeria',2,3,2,4); setBase('Austria',2,3,3,3); setBase('Jordan',2,0,2,5);
-  setBase('Colombia',1,3,3,1); setBase('Portugal',1,1,1,1); setBase('Congo DR',1,1,1,1); setBase('Uzbekistan',1,0,1,3);
-  setBase('England',1,3,4,2); setBase('Ghana',1,3,1,0); setBase('Croatia',1,0,2,4); setBase('Panama',1,0,0,1);
+  setBase('Colombia',1,3,3,1); setBase('Portugal',2,4,6,1); setBase('Congo DR',1,1,1,1); setBase('Uzbekistan',2,0,1,8);
+  setBase('England',2,4,5,3); setBase('Ghana',2,4,2,1); setBase('Croatia',1,0,2,4); setBase('Panama',1,0,0,1);
 }
 function applyOddsDefaults(){
   scores={
-    'England|Ghana':{h:2,a:0}, 'Panama|Croatia':{h:0,a:2}, 'Portugal|Uzbekistan':{h:2,a:0}, 'Colombia|Congo DR':{h:2,a:0},
+    'Panama|Croatia':{h:0,a:2}, 'Colombia|Congo DR':{h:2,a:0},
     'Scotland|Brazil':{h:0,a:2}, 'Morocco|Haiti':{h:2,a:0}, 'Switzerland|Canada':{h:1,a:1}, 'Bosnia and Herzegovina|Qatar':{h:2,a:0}, 'Czechia|Mexico':{h:0,a:2}, 'South Africa|Korea Republic':{h:0,a:1},
     'Curaçao|Côte d\'Ivoire':{h:0,a:2}, 'Ecuador|Germany':{h:0,a:2}, 'Japan|Sweden':{h:2,a:1}, 'Tunisia|Netherlands':{h:0,a:3}, 'Türkiye|USA':{h:0,a:2}, 'Paraguay|Australia':{h:1,a:1},
     'Norway|France':{h:1,a:2}, 'Senegal|Iraq':{h:2,a:0}, 'Egypt|IR Iran':{h:1,a:0}, 'New Zealand|Belgium':{h:0,a:3}, 'Cabo Verde|Saudi Arabia':{h:1,a:0}, 'Uruguay|Spain':{h:1,a:2},
@@ -283,7 +283,7 @@ function applyOddsDefaults(){
   };
 }
 function save(){
-  localStorage.setItem('wc26-path-lab-v4', JSON.stringify({base,scores,knockoutPicks,selectedTeam:teamSelector?.value}));
+  localStorage.setItem('wc26-path-lab-v5', JSON.stringify({base,scores,knockoutPicks,selectedTeam:teamSelector?.value}));
   const el=document.getElementById('saveStatus');
   if(el){ el.textContent='✓ Saved'; el.style.opacity='1'; clearTimeout(el._t); el._t=setTimeout(()=>{el.style.opacity='0';},2000); }
 }
@@ -291,11 +291,14 @@ function load(){
   applyCurrentBaseline();
   applyOddsDefaults();
   knockoutPicks={};
-  const raw=localStorage.getItem('wc26-path-lab-v4')||localStorage.getItem('wc26-path-lab-v3')||localStorage.getItem('wc26-path-lab-v2')||localStorage.getItem('wc26-path-lab');
+  const rawV5=localStorage.getItem('wc26-path-lab-v5');
+  const rawOld=!rawV5&&(localStorage.getItem('wc26-path-lab-v4')||localStorage.getItem('wc26-path-lab-v3')||localStorage.getItem('wc26-path-lab-v2')||localStorage.getItem('wc26-path-lab'));
+  const raw=rawV5||rawOld;
   if(!raw) return;
   try{
     const data=JSON.parse(raw);
-    if(data.base) Object.entries(data.base).forEach(([t,v])=>{ if(base[t]) Object.assign(base[t],v); });
+    // Only restore base from v5 saves; old saves have stale base values that would override the hardcoded baseline
+    if(rawV5&&data.base) Object.entries(data.base).forEach(([t,v])=>{ if(base[t]) Object.assign(base[t],v); });
     if(data.scores) Object.assign(scores,data.scores);
     knockoutPicks=data.knockoutPicks||{};
     if(data.selectedTeam) localStorage.setItem('wc26-selected-team',data.selectedTeam);
@@ -326,9 +329,10 @@ async function sample(){
         const hs=+hc.score, as2=+ac.score;
         if(Number.isNaN(hs)||Number.isNaN(as2)) continue;
         const k1=resultKey(hn,an), k2=resultKey(an,hn);
-        const k=fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k1)?k1
-               :fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k2)?k2:null;
-        if(k){scores[k]={h:hs,a:as2};count++;}
+        const isK1=fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k1);
+        const isK2=!isK1&&fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k2);
+        const k=isK1?k1:isK2?k2:null;
+        if(k){scores[k]=isK1?{h:hs,a:as2}:{h:as2,a:hs};count++;}
       }
     }
     oddsLastFetched=new Date();
@@ -562,7 +566,7 @@ function renderBracket(){
 function renderAll(){ renderTables(); renderPaths(); renderBracket(); }
 document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('.tab,.page').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); document.getElementById(btn.dataset.page).classList.add('active'); renderAll(); }));
 if(window.teamSelector) teamSelector.addEventListener('change',()=>{localStorage.setItem('wc26-selected-team', teamSelector.value); renderAll(); save();});
-resetBtn.addEventListener('click',()=>{localStorage.removeItem('wc26-path-lab-v4'); localStorage.removeItem('wc26-path-lab-v3'); localStorage.removeItem('wc26-path-lab-v2'); localStorage.removeItem('wc26-path-lab'); load(); buildInputs(); renderAll();}); sampleBtn.addEventListener('click',()=>sample().catch(console.error));
+resetBtn.addEventListener('click',()=>{localStorage.removeItem('wc26-path-lab-v5'); localStorage.removeItem('wc26-path-lab-v4'); localStorage.removeItem('wc26-path-lab-v3'); localStorage.removeItem('wc26-path-lab-v2'); localStorage.removeItem('wc26-path-lab'); load(); buildInputs(); renderAll();}); sampleBtn.addEventListener('click',()=>sample().catch(console.error));
 document.getElementById('sampleBtn2')?.addEventListener('click',()=>sample().catch(console.error));
 load(); buildInputs(); renderAll();
 
