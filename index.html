@@ -22,10 +22,15 @@
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='62'%3E%3Cpolygon points='36,3 69,21 69,41 36,59 3,41 3,21' fill='none' stroke='%23ffffff' stroke-opacity='0.03' stroke-width='1'/%3E%3C/svg%3E"),
       radial-gradient(circle at 15% 10%, rgba(77,171,247,.22), transparent 26%),
       radial-gradient(circle at 85% 0%, rgba(32,201,151,.18), transparent 22%),
       linear-gradient(160deg,#04101b,#071421 48%,#081b2b);color:var(--text);min-height:100vh}
     header{position:sticky;top:0;z-index:10;background:rgba(7,20,33,.86);backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,.08)}
+    header::before{content:"";display:block;height:3px;background:linear-gradient(90deg,#20c997 0%,#4dabf7 33%,#f2c14e 66%,#ff6b6b 100%)}
+    .wc-badge{font-size:10px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:6px;opacity:.9}
+    .bCard.bFinal{border-color:rgba(242,193,78,.55);background:rgba(242,193,78,.11)}
+    .bCard.bFinal .bCode::before{content:"🏆 "}
     .wrap{max-width:1280px;margin:0 auto;padding:18px}
     .hero{display:flex;gap:16px;align-items:center;justify-content:space-between}
     .title h1{margin:0;font-size:clamp(24px,4vw,42px);letter-spacing:-.04em}.title p{margin:6px 0 0;color:var(--muted)}
@@ -110,6 +115,7 @@
   <div class="wrap">
     <div class="hero">
       <div class="title">
+        <div class="wc-badge">⚽ FIFA World Cup 2026™ · 🇨🇦 Canada · USA 🇺🇸 · Mexico 🇲🇽</div>
         <h1>World Cup 2026 Path Lab</h1>
         <p>Predict the remaining group scores, recalculate tables, then select any team to build the knockout stages and bracket.</p>
       </div>
@@ -194,6 +200,22 @@
   <div class="footer">Fixture and bracket slot structure based on FIFA's published 2026 match schedule. Media route shorthand varies because third-place allocations remain conditional until the group stage is complete.</div>
 </main>
 <script>
+const flags={
+  'Mexico':'🇲🇽','Czechia':'🇨🇿','South Africa':'🇿🇦','Korea Republic':'🇰🇷',
+  'Canada':'🇨🇦','Switzerland':'🇨🇭','Bosnia and Herzegovina':'🇧🇦','Qatar':'🇶🇦',
+  'Brazil':'🇧🇷','Scotland':'🏴󠁧󠁢󠁳󠁣󠁴󠁿','Morocco':'🇲🇦','Haiti':'🇭🇹',
+  'USA':'🇺🇸','Türkiye':'🇹🇷','Paraguay':'🇵🇾','Australia':'🇦🇺',
+  'Germany':'🇩🇪','Ecuador':'🇪🇨','Côte d\'Ivoire':'🇨🇮','Curaçao':'🇨🇼',
+  'Netherlands':'🇳🇱','Sweden':'🇸🇪','Tunisia':'🇹🇳','Japan':'🇯🇵',
+  'Belgium':'🇧🇪','IR Iran':'🇮🇷','Egypt':'🇪🇬','New Zealand':'🇳🇿',
+  'Spain':'🇪🇸','Uruguay':'🇺🇾','Cabo Verde':'🇨🇻','Saudi Arabia':'🇸🇦',
+  'France':'🇫🇷','Norway':'🇳🇴','Senegal':'🇸🇳','Iraq':'🇮🇶',
+  'Argentina':'🇦🇷','Austria':'🇦🇹','Jordan':'🇯🇴','Algeria':'🇩🇿',
+  'Portugal':'🇵🇹','Colombia':'🇨🇴','Congo DR':'🇨🇩','Uzbekistan':'🇺🇿',
+  'England':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Croatia':'🇭🇷','Ghana':'🇬🇭','Panama':'🇵🇦'
+};
+function withFlag(t){ return t&&flags[t]?flags[t]+' '+t:t; }
+
 const groups = {
   A:['Mexico','Czechia','South Africa','Korea Republic'],
   B:['Canada','Switzerland','Bosnia and Herzegovina','Qatar'],
@@ -260,7 +282,7 @@ function buildSlots(rg){ const used=new Set(); return {
   M85:[rankOf('B',1,rg),thirdQualifier(rg,['E','F','G','I','J'],used)], M86:[rankOf('J',1,rg),rankOf('H',2,rg)], M87:[rankOf('K',1,rg),thirdQualifier(rg,['D','E','I','J','L'],used)], M88:[rankOf('D',2,rg),rankOf('G',2,rg)]
 };}
 function matchLabel(slots,m){ return (slots[m]||['?','?']).join(' v '); }
-function pathHTML(items){ return items.map(x=>`<div class="round${x.round==='Final'?' r-final':''}"><div class="label">${x.round}</div><div class="opp">${x.opponent}</div><div class="slot">${x.slot}</div></div>`).join(''); }
+function pathHTML(items){ return items.map(x=>`<div class="round${x.round==='Final'?' r-final':''}"><div class="label">${x.round}</div><div class="opp">${withFlag(x.opponent)}</div><div class="slot">${x.slot}</div></div>`).join(''); }
 const r16Map={M89:['M77','M74'],M90:['M73','M75'],M91:['M76','M78'],M92:['M80','M79'],M93:['M84','M83'],M94:['M81','M82'],M95:['M86','M88'],M96:['M85','M87']};
 const qfMap={M97:['M89','M90'],M98:['M93','M94'],M99:['M92','M91'],M100:['M95','M96']};
 const sfMap={M101:['M97','M98'],M102:['M99','M100']};
@@ -328,12 +350,12 @@ function matchRoundName(match){
 }
 function matchControlHTML(match, slots, selectedTeam){
   const opts=matchOptions(match, slots, selectedTeam);
-  const label=opts.map(x=>cleanTeam(x)).join(' v ');
+  const label=opts.map(x=>withFlag(cleanTeam(x))).join(' v ');
   if(containsTeam(opts, selectedTeam)){
-    return `<div class="pickMatch"><div class="code">${match}<br>${matchRoundName(match)}</div><div><div class="forcedPick"><strong>${cleanTeam(selectedTeam)}</strong> forced through · ${label}</div></div></div>`;
+    return `<div class="pickMatch"><div class="code">${match}<br>${matchRoundName(match)}</div><div><div class="forcedPick"><strong>${withFlag(cleanTeam(selectedTeam))}</strong> forced through · ${label}</div></div></div>`;
   }
   const current=knockoutPicks[match] && containsTeam(opts, knockoutPicks[match]) ? knockoutPicks[match] : cleanTeam(opts[0]);
-  return `<div class="pickMatch"><div class="code">${match}<br>${matchRoundName(match)}</div><div><select class="selectish" data-pick="${match}">${opts.map(o=>`<option value="${cleanTeam(o)}" ${cleanTeam(o)===current?'selected':''}>${cleanTeam(o)}</option>`).join('')}</select><div class="forcedPick">${label}</div></div></div>`;
+  return `<div class="pickMatch"><div class="code">${match}<br>${matchRoundName(match)}</div><div><select class="selectish" data-pick="${match}">${opts.map(o=>`<option value="${cleanTeam(o)}" ${cleanTeam(o)===current?'selected':''}>${withFlag(cleanTeam(o))}</option>`).join('')}</select><div class="forcedPick">${label}</div></div></div>`;
 }
 function renderWinnerPicks(r32Match, slots, selectedTeam){
   if(!winnerPicks || !r32Match){ return; }
@@ -341,7 +363,7 @@ function renderWinnerPicks(r32Match, slots, selectedTeam){
   const otherSemi=semi==='M101'?'M102':'M101';
   const own=collectMatches(semi).filter(m=>m!==r32Match || !containsTeam(matchOptions(m,slots,selectedTeam), selectedTeam));
   const other=collectMatches(otherSemi);
-  winnerPicks.innerHTML=`<div class="pickColumn"><h3>Your side of the draw</h3><div class="muted small">Controls the opponents waiting for ${selectedTeam}.</div>${own.map(m=>matchControlHTML(m,slots,selectedTeam)).join('')}</div><div class="pickColumn"><h3>Other side of the draw</h3><div class="muted small">Controls the projected finalist.</div>${other.map(m=>matchControlHTML(m,slots,selectedTeam)).join('')}</div>`;
+  winnerPicks.innerHTML=`<div class="pickColumn"><h3>Your side of the draw</h3><div class="muted small">Controls the opponents waiting for ${withFlag(selectedTeam)}.</div>${own.map(m=>matchControlHTML(m,slots,selectedTeam)).join('')}</div><div class="pickColumn"><h3>Other side of the draw</h3><div class="muted small">Controls the projected finalist.</div>${other.map(m=>matchControlHTML(m,slots,selectedTeam)).join('')}</div>`;
   winnerPicks.querySelectorAll('[data-pick]').forEach(sel=>sel.addEventListener('change',e=>{ knockoutPicks[e.target.dataset.pick]=e.target.value; save(); renderAll(); }));
 }
 function diagramHTML(r32Match, slots, selectedTeam){
@@ -356,7 +378,7 @@ function renderTeamSelector(){
   if(!window.teamSelector) return;
   const current=teamSelector.value || localStorage.getItem('wc26-selected-team') || 'England';
   const teams=Object.values(groups).flat().sort((a,b)=>a.localeCompare(b));
-  teamSelector.innerHTML=teams.map(t=>`<option value="${t}">${t}</option>`).join('');
+  teamSelector.innerHTML=teams.map(t=>`<option value="${t}">${withFlag(t)}</option>`).join('');
   teamSelector.value=teams.includes(current)?current:'England';
 }
 function renderPaths(){
@@ -366,34 +388,34 @@ function renderPaths(){
   if(!pos){ selectedPath.innerHTML='<div class="note">Team not found in the current data.</div>'; teamStatus.textContent='No data'; winnerPicks.innerHTML=''; return; }
   const qual = pos.rank<=2 || !!r32;
   teamStatus.innerHTML=`Group ${pos.group}, ${pos.rank}${pos.rank===1?'st':pos.rank===2?'nd':pos.rank===3?'rd':'th'} · ${pos.pts} pts · GD ${pos.gd}`;
-  if(!qual){ selectedPath.innerHTML=`<div class="note"><strong>${team}</strong> is not currently projected to qualify from Group ${pos.group}. Change the scores on page 1 to alter the path.</div>`; winnerPicks.innerHTML=''; return; }
-  if(pos.rank===3 && !r32){ selectedPath.innerHTML=`<div class="note"><strong>${team}</strong> is third in Group ${pos.group}, but is not selected by the current third-place allocation model. Change the scores on page 1 to alter the path.</div>`; winnerPicks.innerHTML=''; return; }
+  if(!qual){ selectedPath.innerHTML=`<div class="note"><strong>${withFlag(team)}</strong> is not currently projected to qualify from Group ${pos.group}. Change the scores on page 1 to alter the path.</div>`; winnerPicks.innerHTML=''; return; }
+  if(pos.rank===3 && !r32){ selectedPath.innerHTML=`<div class="note"><strong>${withFlag(team)}</strong> is third in Group ${pos.group}, but is not selected by the current third-place allocation model. Change the scores on page 1 to alter the path.</div>`; winnerPicks.innerHTML=''; return; }
   renderWinnerPicks(r32[0], slots, team);
   selectedPath.className='path';
   const items=[];
   let current=r32[0];
   let teams=matchOptions(current, slots, team);
   let opponent=teams.find(x=>cleanTeam(x)!==team) || 'Opponent TBD';
-  items.push({round:'R32',opponent:cleanTeam(opponent),slot:`${current}: ${teams.map(cleanTeam).join(' v ')}`});
+  items.push({round:'R32',opponent:cleanTeam(opponent),slot:`${current}: ${teams.map(t=>withFlag(cleanTeam(t))).join(' v ')}` });
   const roundNames={'M89':'R16','M90':'R16','M91':'R16','M92':'R16','M93':'R16','M94':'R16','M95':'R16','M96':'R16','M97':'Quarter-final','M98':'Quarter-final','M99':'Quarter-final','M100':'Quarter-final','M101':'Semi-final','M102':'Semi-final','M104':'Final'};
   while(nextMatch[current]){
     const nxt=nextMatch[current];
     const parts=allRoundMaps()[nxt];
     const sibling=parts.find(x=>x!==current);
     const opp=winnerOf(sibling, slots, team);
-    items.push({round:roundNames[nxt]||nxt,opponent:cleanTeam(opp),slot:`${nxt}: ${matchOptions(nxt,slots,team).map(cleanTeam).join(' v ')}`});
+    items.push({round:roundNames[nxt]||nxt,opponent:cleanTeam(opp),slot:`${nxt}: ${matchOptions(nxt,slots,team).map(t=>withFlag(cleanTeam(t))).join(' v ')}` });
     current=nxt;
     if(nxt==='M104') break;
   }
   selectedPath.innerHTML=pathHTML(items);
 }
-function buildInputs(){ const byDate={}; fixtures.forEach(f=>(byDate[f[0]]??=[]).push(f)); fixturesList.innerHTML=Object.entries(byDate).map(([date,fs])=>`<div class="dateChip">${date}</div>`+fs.map(([d,g,h,a])=>{ const r=scores[resultKey(h,a)]||{h:'',a:''}; return `<div class="fixture"><div class="date">${d}</div><div class="home">${h}</div><div class="scorebox"><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="h" value="${r.h}"><span>–</span><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="a" value="${r.a}"></div><div class="away">${a}</div><div class="groupTag">Group ${g}</div></div>`}).join('')).join('');
+function buildInputs(){ const byDate={}; fixtures.forEach(f=>(byDate[f[0]]??=[]).push(f)); fixturesList.innerHTML=Object.entries(byDate).map(([date,fs])=>`<div class="dateChip">${date}</div>`+fs.map(([d,g,h,a])=>{ const r=scores[resultKey(h,a)]||{h:'',a:''}; return `<div class="fixture"><div class="date">${d}</div><div class="home">${withFlag(h)}</div><div class="scorebox"><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="h" value="${r.h}"><span>–</span><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="a" value="${r.a}"></div><div class="away">${withFlag(a)}</div><div class="groupTag">Group ${g}</div></div>`}).join('')).join('');
   document.querySelectorAll('[data-score]').forEach(inp=>inp.addEventListener('input',e=>{ const k=e.target.dataset.score; scores[k]=scores[k]||{h:'',a:''}; scores[k][e.target.dataset.side]=e.target.value; renderAll(); save(); }));
   baseEditor.innerHTML=Object.entries(groups).map(([g,teams])=>`<div class="teamEdit"><strong>Group ${g}</strong>`+teams.map(t=>`<div style="margin:8px 0"><span class="team">${t}</span><br><label>Pld<input type="number" min="0" data-base="${t}" data-field="pld" value="${base[t].pld}"></label><label>Pts<input type="number" min="0" data-base="${t}" data-field="pts" value="${base[t].pts}"></label><label>GF<input type="number" min="0" data-base="${t}" data-field="gf" value="${base[t].gf}"></label><label>GA<input type="number" min="0" data-base="${t}" data-field="ga" value="${base[t].ga}"></label></div>`).join('')+`</div>`).join('');
   document.querySelectorAll('[data-base]').forEach(inp=>inp.addEventListener('input',e=>{ const t=e.target.dataset.base, f=e.target.dataset.field; base[t][f]=+e.target.value||0; renderAll(); save(); }));
 }
-function renderTables(){ const rg=rankedGroups(); groupCards.innerHTML=Object.entries(rg).map(([g,rows])=>`<div class="card third"><h3>Group ${g}</h3><table><thead><tr><th>#</th><th>Team</th><th class="num">Pld</th><th class="num">GD</th><th class="num">Pts</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${i<2?'qualified':i===2?'thirdPlace':'eliminated'}"><td class="rank">${i+1}</td><td class="team">${r.team}</td><td class="num">${r.pld}</td><td class="num">${r.gd}</td><td class="num"><strong>${r.pts}</strong></td></tr>`).join('')}</tbody></table></div>`).join('');
-  const th=thirds(rg); thirdTable.innerHTML=`<table><thead><tr><th>#</th><th>Team</th><th>Group</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th>Status</th></tr></thead><tbody>${th.map((r,i)=>`<tr class="${i<8?'qualified':'eliminated'}"${i===7?' style="border-bottom:2px dashed rgba(32,201,151,.45)"':i===8?' style="opacity:.55"':''} ><td class="rank">${i+1}</td><td class="team">${r.team}</td><td>${r.group}</td><td class="num">${r.pts}</td><td class="num">${r.gd}</td><td class="num">${r.gf}</td><td>${i<8?'<span class="green">✓ Qualifies</span>':'Out'}</td></tr>`).join('')}</tbody></table>`;
+function renderTables(){ const rg=rankedGroups(); groupCards.innerHTML=Object.entries(rg).map(([g,rows])=>`<div class="card third"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="background:var(--gold);color:#1e1600;font-weight:900;font-size:13px;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${g}</div><h3 style="margin:0">Group ${g}</h3></div><table><thead><tr><th>#</th><th>Team</th><th class="num">Pld</th><th class="num">GD</th><th class="num">Pts</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${i<2?'qualified':i===2?'thirdPlace':'eliminated'}"><td class="rank">${i+1}</td><td class="team">${withFlag(r.team)}</td><td class="num">${r.pld}</td><td class="num">${r.gd}</td><td class="num"><strong>${r.pts}</strong></td></tr>`).join('')}</tbody></table></div>`).join('');
+  const th=thirds(rg); thirdTable.innerHTML=`<table><thead><tr><th>#</th><th>Team</th><th>Group</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th>Status</th></tr></thead><tbody>${th.map((r,i)=>`<tr class="${i<8?'qualified':'eliminated'}"${i===7?' style="border-bottom:2px dashed rgba(32,201,151,.45)"':i===8?' style="opacity:.55"':''} ><td class="rank">${i+1}</td><td class="team">${withFlag(r.team)}</td><td>${r.group}</td><td class="num">${r.pts}</td><td class="num">${r.gd}</td><td class="num">${r.gf}</td><td>${i<8?'<span class="green">✓ Qualifies</span>':'Out'}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function renderBracket(){
@@ -421,7 +443,7 @@ function renderBracket(){
     const opts=matchOptions(match,slotsMap,team).map(cleanTeam);
     const winner=cleanTeam(winnerOf(match,slotsMap,team));
     const hl=opts.includes(team);
-    return `<div class="bCard${hl?' bHl':''}"><div class="bCode">${match} · ${matchRoundName(match)}</div>${opts.map(o=>`<div class="bTeam${o===winner?' bWin':''}">${o||'TBD'}</div>`).join('')}</div>`;
+    return `<div class="bCard${hl?' bHl':''}${match==='M104'?' bFinal':''}"><div class="bCode">${match} · ${matchRoundName(match)}</div>${opts.map(o=>`<div class="bTeam${o===winner?' bWin':''}">${o?withFlag(o):'TBD'}</div>`).join('')}</div>`;
   }
 
   function connSVG(ri){
