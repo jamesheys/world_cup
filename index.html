@@ -287,7 +287,20 @@ function save(){
   const el=document.getElementById('saveStatus');
   if(el){ el.textContent='✓ Saved'; el.style.opacity='1'; clearTimeout(el._t); el._t=setTimeout(()=>{el.style.opacity='0';},2000); }
 }
-function load(){ const raw=localStorage.getItem('wc26-path-lab-v4') || localStorage.getItem('wc26-path-lab-v3') || localStorage.getItem('wc26-path-lab-v2') || localStorage.getItem('wc26-path-lab'); if(raw){ try{const data=JSON.parse(raw); base=freshBase(); base={...base,...data.base}; scores=data.scores||{}; knockoutPicks=data.knockoutPicks||{}; if(data.selectedTeam) localStorage.setItem('wc26-selected-team', data.selectedTeam); return;}catch(e){} } applyCurrentBaseline(); applyOddsDefaults(); knockoutPicks={}; }
+function load(){
+  applyCurrentBaseline();
+  applyOddsDefaults();
+  knockoutPicks={};
+  const raw=localStorage.getItem('wc26-path-lab-v4')||localStorage.getItem('wc26-path-lab-v3')||localStorage.getItem('wc26-path-lab-v2')||localStorage.getItem('wc26-path-lab');
+  if(!raw) return;
+  try{
+    const data=JSON.parse(raw);
+    if(data.base) Object.entries(data.base).forEach(([t,v])=>{ if(base[t]) Object.assign(base[t],v); });
+    if(data.scores) Object.assign(scores,data.scores);
+    knockoutPicks=data.knockoutPicks||{};
+    if(data.selectedTeam) localStorage.setItem('wc26-selected-team',data.selectedTeam);
+  }catch(e){}
+}
 async function sample(){
   if(sampleRunning) return;
   sampleRunning=true;
@@ -484,7 +497,7 @@ function renderPaths(){
   selectedPath.innerHTML=pathHTML(items);
 }
 function buildInputs(){ const byDate={}; fixtures.forEach(f=>(byDate[f[0]]??=[]).push(f)); fixturesList.innerHTML=Object.entries(byDate).map(([date,fs])=>`<div class="dateChip">${date}</div>`+fs.map(([d,g,h,a])=>{ const r=scores[resultKey(h,a)]||{h:'',a:''}; return `<div class="fixture"><div class="date">${d}</div><div class="home">${withFlag(h)}</div><div class="scorebox"><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="h" value="${r.h}"><span>–</span><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="a" value="${r.a}"></div><div class="away">${withFlag(a)}</div><div class="groupTag">Group ${g}</div></div>`}).join('')).join('');
-  document.querySelectorAll('[data-score]').forEach(inp=>inp.addEventListener('input',e=>{ const k=e.target.dataset.score; scores[k]=scores[k]||{h:'',a:''}; scores[k][e.target.dataset.side]=e.target.value; renderAll(); save(); }));
+  document.querySelectorAll('[data-score]').forEach(inp=>inp.addEventListener('input',e=>{ const k=e.target.dataset.score; scores[k]=scores[k]||{h:'',a:''}; scores[k][e.target.dataset.side]=e.target.value; renderTables(); save();}));
   baseEditor.innerHTML=Object.entries(groups).map(([g,teams])=>`<div class="teamEdit"><strong>Group ${g}</strong>`+teams.map(t=>`<div style="margin:8px 0"><span class="team">${t}</span><br><label>Pld<input type="number" min="0" data-base="${t}" data-field="pld" value="${base[t].pld}"></label><label>Pts<input type="number" min="0" data-base="${t}" data-field="pts" value="${base[t].pts}"></label><label>GF<input type="number" min="0" data-base="${t}" data-field="gf" value="${base[t].gf}"></label><label>GA<input type="number" min="0" data-base="${t}" data-field="ga" value="${base[t].ga}"></label></div>`).join('')+`</div>`).join('');
   document.querySelectorAll('[data-base]').forEach(inp=>inp.addEventListener('input',e=>{ const t=e.target.dataset.base, f=e.target.dataset.field; base[t][f]=+e.target.value||0; renderAll(); save(); }));
 }
@@ -546,7 +559,7 @@ function renderBracket(){
 
   fullBracket.innerHTML=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding:4px 0 8px"><div style="display:inline-flex;flex-direction:column;min-width:max-content"><div style="display:flex">${labelRow}</div><div style="display:flex">${matchRow}</div></div></div>`;
 }
-function renderAll(){ renderTeamSelector(); renderTables(); renderPaths(); renderBracket(); }
+function renderAll(){ renderTables(); renderPaths(); renderBracket(); }
 document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('.tab,.page').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); document.getElementById(btn.dataset.page).classList.add('active'); renderAll(); }));
 if(window.teamSelector) teamSelector.addEventListener('change',()=>{localStorage.setItem('wc26-selected-team', teamSelector.value); renderAll(); save();});
 resetBtn.addEventListener('click',()=>{localStorage.removeItem('wc26-path-lab-v4'); localStorage.removeItem('wc26-path-lab-v3'); localStorage.removeItem('wc26-path-lab-v2'); localStorage.removeItem('wc26-path-lab'); load(); buildInputs(); renderAll();}); sampleBtn.addEventListener('click',()=>sample().catch(console.error));
