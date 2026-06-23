@@ -255,8 +255,8 @@ const fixtures = [
   ['2026-06-27','L','Panama','England'],['2026-06-27','L','Croatia','Ghana'],['2026-06-27','J','Algeria','Austria'],['2026-06-27','J','Jordan','Argentina'],['2026-06-27','K','Colombia','Portugal'],['2026-06-27','K','Congo DR','Uzbekistan']
 ];
 let base = {}, scores = {}, knockoutPicks = {}, pathView = 'cards';
-function freshBase(){ const b={}; Object.values(groups).flat().forEach(t=>b[t]={pld:0,pts:0,gf:0,ga:0}); return b; }
-function setBase(team,pld,pts,gf,ga){ Object.assign(base[team],{pld,pts,gf,ga}); }
+function freshBase(){ const b={}; Object.values(groups).flat().forEach(t=>b[t]={pld:0,pts:0,gf:0,ga:0,w:0,d:0,l:0}); return b; }
+function setBase(team,pld,pts,gf,ga){ const d=pts%3,w=Math.floor(pts/3),l=pld-w-d; Object.assign(base[team],{pld,pts,gf,ga,w,d,l}); }
 function applyCurrentBaseline(){
   base=freshBase();
   // Results already played, current to 23 June 2026 sources used when this file was generated.
@@ -347,7 +347,7 @@ async function sample(){
   }
 }
 function resultKey(h,a){ return h+'|'+a; }
-function applyMatch(table, h, a, hs, as){ table[h].pld++; table[a].pld++; table[h].gf+=hs; table[h].ga+=as; table[a].gf+=as; table[a].ga+=hs; if(hs>as){table[h].pts+=3}else if(as>hs){table[a].pts+=3}else{table[h].pts++;table[a].pts++;} }
+function applyMatch(table, h, a, hs, as){ table[h].pld++; table[a].pld++; table[h].gf+=hs; table[h].ga+=as; table[a].gf+=as; table[a].ga+=hs; if(hs>as){table[h].pts+=3;table[h].w++;table[a].l++;}else if(as>hs){table[a].pts+=3;table[a].w++;table[h].l++;}else{table[h].pts++;table[a].pts++;table[h].d++;table[a].d++;} }
 function calculated(){ const table=JSON.parse(JSON.stringify(base)); fixtures.forEach(([date,g,h,a])=>{ const r=scores[resultKey(h,a)]; if(r && r.h!=='' && r.a!=='' && !Number.isNaN(+r.h) && !Number.isNaN(+r.a)) applyMatch(table,h,a,+r.h,+r.a); }); return table; }
 function rankedGroups(){ const t=calculated(); const out={}; for(const [g,teams] of Object.entries(groups)){ out[g]=teams.map(team=>({team,group:g,...t[team],gd:t[team].gf-t[team].ga})).sort((x,y)=> y.pts-x.pts || y.gd-x.gd || y.gf-x.gf || x.team.localeCompare(y.team)); } return out; }
 function thirds(rg){ return Object.values(rg).map(arr=>arr[2]).sort((x,y)=> y.pts-x.pts || y.gd-x.gd || y.gf-x.gf || x.team.localeCompare(y.team)); }
@@ -510,7 +510,7 @@ function renderTables(){
   const tT=document.getElementById('thirdTable');
   if(!gC||!tT) return;
   const rg=rankedGroups();
-  gC.innerHTML=Object.entries(rg).map(([g,rows])=>`<div class="card third"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="background:var(--gold);color:#1e1600;font-weight:900;font-size:13px;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${g}</div><h3 style="margin:0">Group ${g}</h3></div><table><thead><tr><th>#</th><th>Team</th><th class="num">Pld</th><th class="num">GD</th><th class="num">Pts</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${i<2?'qualified':i===2?'thirdPlace':'eliminated'}"><td class="rank">${i+1}</td><td class="team">${withFlag(r.team)}</td><td class="num">${r.pld}</td><td class="num">${r.gd}</td><td class="num"><strong>${r.pts}</strong></td></tr>`).join('')}</tbody></table></div>`).join('');
+  gC.innerHTML=Object.entries(rg).map(([g,rows])=>`<div class="card third"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="background:var(--gold);color:#1e1600;font-weight:900;font-size:13px;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${g}</div><h3 style="margin:0">Group ${g}</h3></div><div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Team</th><th class="num">Pld</th><th class="num">W</th><th class="num">D</th><th class="num">L</th><th class="num">GD</th><th class="num">Pts</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${i<2?'qualified':i===2?'thirdPlace':'eliminated'}"><td class="rank">${i+1}</td><td class="team">${withFlag(r.team)}</td><td class="num">${r.pld}</td><td class="num">${r.w}</td><td class="num">${r.d}</td><td class="num">${r.l}</td><td class="num">${r.gd}</td><td class="num"><strong>${r.pts}</strong></td></tr>`).join('')}</tbody></table></div></div>`).join('');
   const th=thirds(rg);
   tT.innerHTML=`<table><thead><tr><th>#</th><th>Team</th><th>Group</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th>Status</th></tr></thead><tbody>${th.map((r,i)=>`<tr class="${i<8?'qualified':'eliminated'}"${i===7?' style="border-bottom:2px dashed rgba(32,201,151,.45)"':i===8?' style="opacity:.55"':''} ><td class="rank">${i+1}</td><td class="team">${withFlag(r.team)}</td><td>${r.group}</td><td class="num">${r.pts}</td><td class="num">${r.gd}</td><td class="num">${r.gf}</td><td>${i<8?'<span class="green">✓ Qualifies</span>':'Out'}</td></tr>`).join('')}</tbody></table>`;
 }
