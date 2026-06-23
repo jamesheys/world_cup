@@ -1,6 +1,6 @@
 {
-  "name": "World Cup 2026 Path Lab",
-  "short_name": "WC26 Path",
+  "name": "World Cup 2026",
+  "short_name": "WC26",
   "description": "Predict group-stage scores, recalculate tables, and build your knockout bracket for FIFA World Cup 2026.",
   "start_url": ".",
   "scope": ".",
