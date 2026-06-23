@@ -312,15 +312,22 @@ async function sample(){
   buildInputs(); renderAll(); save();
   try{
     const dates=['20260623','20260624','20260625','20260626','20260627'];
+    let apiOk=false;
     const fetched=await Promise.allSettled(
       dates.map(d=>fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${d}`)
-        .then(r=>r.ok?r.json().catch(()=>null):null).catch(()=>null))
+        .then(r=>{
+          if(r.ok){apiOk=true; return r.json().catch(()=>null);}
+          console.warn('ESPN HTTP',r.status,'for date',d);
+          return null;
+        }).catch(e=>{console.warn('ESPN fetch error:',e); return null;}))
     );
     let count=0;
     for(const res of fetched){
       if(res.status!=='fulfilled'||!res.value) continue;
       for(const ev of(res.value.events||[])){
-        if(!ev.status?.type?.completed) continue;
+        const st=ev.status?.type;
+        // Accept completed games, in-progress games, and post-game state
+        if(!st?.completed && st?.state!=='in' && st?.state!=='post') continue;
         const comp=ev.competitions?.[0]; if(!comp) continue;
         const hc=comp.competitors?.find(c=>c.homeAway==='home');
         const ac=comp.competitors?.find(c=>c.homeAway==='away');
@@ -337,8 +344,18 @@ async function sample(){
     }
     oddsLastFetched=new Date();
     buildInputs(); renderAll(); save();
-    const msg=count?`Live scores loaded · ${count} match${count===1?'':'es'} · ${oddsLastFetched.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`:`Live data unavailable · static defaults (${ODDS_DATE})`;
-    document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=msg;el.style.color=count?'var(--green)':'var(--red)';});
+    let msg, col;
+    if(count){
+      msg=`Live scores loaded · ${count} match${count===1?'':'es'} · ${oddsLastFetched.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`;
+      col='var(--green)';
+    }else if(apiOk){
+      msg=`API connected · no live/finished matches yet · static defaults (${ODDS_DATE})`;
+      col='var(--muted)';
+    }else{
+      msg=`Live data unavailable · static defaults (${ODDS_DATE})`;
+      col='var(--red)';
+    }
+    document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=msg;el.style.color=col;});
   }catch(e){
     console.warn('ESPN fetch failed:',e);
     document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=`Live fetch failed · static defaults (${ODDS_DATE})`;el.style.color='var(--red)';});
