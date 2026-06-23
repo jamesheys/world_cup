@@ -131,7 +131,7 @@
     <div class="grid">
       <div class="card twoThird">
         <div class="sectionTitle">
-          <div><h2>Remaining group fixtures</h2><div class="muted">Default scores are filled from current market-implied favourites and recent group form. Edit any score.</div></div>
+          <div><h2>Remaining group fixtures</h2><div class="muted">Completed matches load live results. Remaining fixtures default to market-implied favourites. Edit any predicted score.</div></div>
           <div class="toolbar"><button class="primary" id="saveBtn">Save scenario</button><button class="secondary" id="sampleBtn">Load odds + live scores</button><button class="danger" id="resetBtn">Reset</button></div>
           <div class="oddsStatus muted small" style="margin-top:4px;width:100%"></div>
         </div>
@@ -139,7 +139,7 @@
       </div>
       <div class="card third">
         <h3>How paths are calculated</h3>
-        <p class="note">The app now derives group winners, runners-up and third-place candidates directly from your score inputs and the starting table. No forced scenario assumptions are applied.</p>
+        <p class="note">The app derives group winners, runners-up and third-place candidates directly from your score inputs and the starting table. No forced scenario assumptions are applied.</p>
         <p class="muted small">Default scores are market-informed approximations, not betting advice. Third-place assignment is modelled by taking the highest-ranked available third-place team from each eligible pool; FIFA's exact allocation matrix can be more complex.</p>
       </div>
       <div class="card">
@@ -190,7 +190,7 @@
           <div><h2>Bracket diagram</h2><div class="muted">A completed knockout bracket using the score inputs and winner picks from Knockout Stages.</div></div>
           <button class="primary" onclick="renderAll()">Refresh bracket</button>
         </div>
-        <p class="muted small">The selected team from page 3 is treated as winning its own matches. Use the winner selectors on page 3 to change the rest of the bracket.</p>
+        <p class="muted small">The selected team from the Knockout tab is treated as winning its own matches. Use the winner selectors on the Knockout tab to change the rest of the bracket.</p>
       </div>
       <div class="card"><div id="fullBracket"></div></div>
     </div>
@@ -216,6 +216,7 @@ function withFlag(t){ return t&&flags[t]?flags[t]+' '+t:t; }
 
 const ODDS_DATE = '23 Jun 2026';
 let oddsLastFetched = null;
+let sampleRunning = false;
 const ESPN_TEAM = {
   'South Korea':'Korea Republic',
   'Ivory Coast':"Côte d'Ivoire",
@@ -282,33 +283,44 @@ function applyOddsDefaults(){
 function save(){ localStorage.setItem('wc26-path-lab-v4', JSON.stringify({base,scores,knockoutPicks,selectedTeam:teamSelector?.value})); }
 function load(){ const raw=localStorage.getItem('wc26-path-lab-v4') || localStorage.getItem('wc26-path-lab-v3') || localStorage.getItem('wc26-path-lab-v2') || localStorage.getItem('wc26-path-lab'); if(raw){ try{const data=JSON.parse(raw); base=freshBase(); base={...base,...data.base}; scores=data.scores||{}; knockoutPicks=data.knockoutPicks||{}; if(data.selectedTeam) localStorage.setItem('wc26-selected-team', data.selectedTeam); return;}catch(e){} } applyCurrentBaseline(); applyOddsDefaults(); knockoutPicks={}; }
 async function sample(){
-  applyCurrentBaseline(); applyOddsDefaults(); knockoutPicks={};
+  if(sampleRunning) return;
+  sampleRunning=true;
+  applyCurrentBaseline(); applyOddsDefaults();
   document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=`Static defaults · ${ODDS_DATE} · Fetching live scores…`;el.style.color='var(--muted)';});
   buildInputs(); renderAll(); save();
   try{
     const dates=['20260623','20260624','20260625','20260626','20260627'];
+    const fetched=await Promise.allSettled(
+      dates.map(d=>fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${d}`)
+        .then(r=>r.ok?r.json().catch(()=>null):null).catch(()=>null))
+    );
     let count=0;
-    for(const d of dates){
-      const resp=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${d}`);
-      if(!resp.ok) continue;
-      const data=await resp.json();
-      for(const ev of(data.events||[])){
+    for(const res of fetched){
+      if(res.status!=='fulfilled'||!res.value) continue;
+      for(const ev of(res.value.events||[])){
         if(!ev.status?.type?.completed) continue;
         const comp=ev.competitions?.[0]; if(!comp) continue;
         const hc=comp.competitors?.find(c=>c.homeAway==='home');
         const ac=comp.competitors?.find(c=>c.homeAway==='away');
         if(!hc||!ac) continue;
         const hn=espnName(hc.team.displayName), an=espnName(ac.team.displayName);
-        const k=resultKey(hn,an);
-        if(fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k)){scores[k]={h:+hc.score,a:+ac.score};count++;}
+        const hs=+hc.score, as2=+ac.score;
+        if(Number.isNaN(hs)||Number.isNaN(as2)) continue;
+        const k1=resultKey(hn,an), k2=resultKey(an,hn);
+        const k=fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k1)?k1
+               :fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k2)?k2:null;
+        if(k){scores[k]={h:hs,a:as2};count++;}
       }
     }
     oddsLastFetched=new Date();
     buildInputs(); renderAll(); save();
-    document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=`Live scores loaded · ${count} match${count===1?'':'es'} · ${oddsLastFetched.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`;el.style.color='var(--green)';});
+    const msg=count?`Live scores loaded · ${count} match${count===1?'':'es'} · ${oddsLastFetched.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`:`Live data unavailable · static defaults (${ODDS_DATE})`;
+    document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=msg;el.style.color=count?'var(--green)':'var(--red)';});
   }catch(e){
     console.warn('ESPN fetch failed:',e);
     document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=`Live fetch failed · static defaults (${ODDS_DATE})`;el.style.color='var(--red)';});
+  }finally{
+    sampleRunning=false;
   }
 }
 function resultKey(h,a){ return h+'|'+a; }
@@ -425,19 +437,18 @@ function renderTeamSelector(){
   teamSelector.value=teams.includes(current)?current:'';
 }
 function renderPaths(){
-  renderTeamSelector();
   const rg=rankedGroups(); const slots=buildSlots(rg); const team=teamSelector.value||'';
   if(!team){
-    teamStatus.innerHTML='Odds projection';
+    teamStatus.innerHTML='Showing odds defaults';
     const ch=cleanTeam(winnerOf('M104',slots,''));
     const f1=cleanTeam(winnerOf('M101',slots,''));
     const f2=cleanTeam(winnerOf('M102',slots,''));
     selectedPath.className='path';
-    selectedPath.innerHTML=`<div class="round r-final"><div class="label">Projected champion</div><div class="opp"><span class="vs">🏆</span>${withFlag(ch)}</div><div class="slot">M104 · Final: ${withFlag(f1)} v ${withFlag(f2)}</div></div>`;
+    selectedPath.innerHTML=`<div class="round r-final"><div class="label">Projected champion</div><div class="opp"><span class="vs">🏆</span>${withFlag(ch)}</div><div class="slot">Final: ${withFlag(f1)} v ${withFlag(f2)}</div></div>`;
     const R32=new Set(['M73','M74','M75','M76','M77','M78','M79','M80','M81','M82','M83','M84','M85','M86','M87','M88']);
     const s1=collectMatches('M101').filter(m=>!R32.has(m));
     const s2=collectMatches('M102').filter(m=>!R32.has(m));
-    winnerPicks.innerHTML=`<div class="pickColumn"><h3>Top half · to M101</h3><div class="muted small">Select a team above to follow their path, or adjust individual results here.</div>${s1.map(m=>matchControlHTML(m,slots,'')).join('')}</div><div class="pickColumn"><h3>Bottom half · to M102</h3>${s2.map(m=>matchControlHTML(m,slots,'')).join('')}</div>`;
+    winnerPicks.innerHTML=`<div class="pickColumn"><h3>Top half · Semi-final 1</h3><div class="muted small">Select a team above to follow their path, or adjust individual results here.</div>${s1.map(m=>matchControlHTML(m,slots,'')).join('')}</div><div class="pickColumn"><h3>Bottom half · Semi-final 2</h3>${s2.map(m=>matchControlHTML(m,slots,'')).join('')}</div>`;
     winnerPicks.querySelectorAll('[data-pick]').forEach(sel=>sel.addEventListener('change',e=>{ knockoutPicks[e.target.dataset.pick]=e.target.value; save(); renderAll(); }));
     return;
   }
@@ -445,8 +456,8 @@ function renderPaths(){
   if(!pos){ selectedPath.innerHTML='<div class="note">Team not found in the current data.</div>'; teamStatus.textContent='No data'; winnerPicks.innerHTML=''; return; }
   const qual = pos.rank<=2 || !!r32;
   teamStatus.innerHTML=`Group ${pos.group}, ${pos.rank}${pos.rank===1?'st':pos.rank===2?'nd':pos.rank===3?'rd':'th'} · ${pos.pts} pts · GD ${pos.gd}`;
-  if(!qual){ selectedPath.innerHTML=`<div class="note"><strong>${withFlag(team)}</strong> is not currently projected to qualify from Group ${pos.group}. Change the scores on page 1 to alter the path.</div>`; winnerPicks.innerHTML=''; return; }
-  if(pos.rank===3 && !r32){ selectedPath.innerHTML=`<div class="note"><strong>${withFlag(team)}</strong> is third in Group ${pos.group}, but is not selected by the current third-place allocation model. Change the scores on page 1 to alter the path.</div>`; winnerPicks.innerHTML=''; return; }
+  if(!qual){ selectedPath.innerHTML=`<div class="note"><strong>${withFlag(team)}</strong> is not currently projected to qualify from Group ${pos.group}. Change the scores on the Fixtures tab to alter the path.</div>`; winnerPicks.innerHTML=''; return; }
+  if(pos.rank===3 && !r32){ selectedPath.innerHTML=`<div class="note"><strong>${withFlag(team)}</strong> is third in Group ${pos.group}, but is not selected by the current third-place allocation model. Change the scores on the Fixtures tab to alter the path.</div>`; winnerPicks.innerHTML=''; return; }
   renderWinnerPicks(r32[0], slots, team);
   selectedPath.className='path';
   const items=[];
@@ -477,7 +488,6 @@ function renderTables(){ const rg=rankedGroups(); groupCards.innerHTML=Object.en
 
 function renderBracket(){
   if(!window.fullBracket) return;
-  renderTeamSelector();
   const rg=rankedGroups(); const slotsMap=buildSlots(rg); const team=teamSelector?.value||'';
 
   const SLOT=82, CARD_W=170, PAD=8, COL_W=CARD_W+PAD*2, CONN_W=44, TOTAL=16*SLOT;
@@ -524,11 +534,11 @@ function renderBracket(){
 
   fullBracket.innerHTML=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding:4px 0 8px"><div style="display:inline-flex;flex-direction:column;min-width:max-content"><div style="display:flex">${labelRow}</div><div style="display:flex">${matchRow}</div></div></div>`;
 }
-function renderAll(){ renderTables(); renderPaths(); renderBracket(); }
+function renderAll(){ renderTeamSelector(); renderTables(); renderPaths(); renderBracket(); }
 document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('.tab,.page').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); document.getElementById(btn.dataset.page).classList.add('active'); renderAll(); }));
 if(window.teamSelector) teamSelector.addEventListener('change',()=>{localStorage.setItem('wc26-selected-team', teamSelector.value); renderAll(); save();});
-saveBtn.addEventListener('click',save); resetBtn.addEventListener('click',()=>{localStorage.removeItem('wc26-path-lab-v4'); localStorage.removeItem('wc26-path-lab-v3'); localStorage.removeItem('wc26-path-lab-v2'); localStorage.removeItem('wc26-path-lab'); load(); buildInputs(); renderAll();}); sampleBtn.addEventListener('click',sample);
-document.getElementById('sampleBtn2')?.addEventListener('click',sample);
+saveBtn.addEventListener('click',save); resetBtn.addEventListener('click',()=>{localStorage.removeItem('wc26-path-lab-v4'); localStorage.removeItem('wc26-path-lab-v3'); localStorage.removeItem('wc26-path-lab-v2'); localStorage.removeItem('wc26-path-lab'); load(); buildInputs(); renderAll();}); sampleBtn.addEventListener('click',()=>sample().catch(console.error));
+document.getElementById('sampleBtn2')?.addEventListener('click',()=>sample().catch(console.error));
 load(); buildInputs(); renderAll();
 
 // Service worker registration
