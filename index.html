@@ -132,7 +132,8 @@
       <div class="card twoThird">
         <div class="sectionTitle">
           <div><h2>Remaining group fixtures</h2><div class="muted">Default scores are filled from current market-implied favourites and recent group form. Edit any score.</div></div>
-          <div class="toolbar"><button class="primary" id="saveBtn">Save scenario</button><button class="secondary" id="sampleBtn">Load current-odds defaults</button><button class="danger" id="resetBtn">Reset</button></div>
+          <div class="toolbar"><button class="primary" id="saveBtn">Save scenario</button><button class="secondary" id="sampleBtn">Load odds + live scores</button><button class="danger" id="resetBtn">Reset</button></div>
+          <div class="oddsStatus muted small" style="margin-top:4px;width:100%"></div>
         </div>
         <div id="fixturesList"></div>
       </div>
@@ -162,7 +163,7 @@
   <section id="paths" class="page">
     <div class="grid">
       <div class="card">
-        <div class="sectionTitle"><div><h2>Knockout Stages</h2><div class="muted">Default view projects winners based on the odds defaults. Select a team to follow their path through to the Final, or adjust individual match outcomes below.</div></div><button class="primary" onclick="renderAll()">Refresh knockout stages</button></div>
+        <div class="sectionTitle"><div><h2>Knockout Stages</h2><div class="muted">Default view projects winners based on the odds defaults. Select a team to follow their path through to the Final, or adjust individual match outcomes below.</div></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0"><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button class="secondary" id="sampleBtn2">Load odds + live scores</button><button class="primary" onclick="renderAll()">Refresh</button></div><div class="oddsStatus muted small" style="text-align:right"></div></div></div>
         <div class="selectorRow">
           <label for="teamSelector">Team</label>
           <select id="teamSelector" class="selectish"></select>
@@ -212,6 +213,22 @@ const flags={
   'England':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Croatia':'🇭🇷','Ghana':'🇬🇭','Panama':'🇵🇦'
 };
 function withFlag(t){ return t&&flags[t]?flags[t]+' '+t:t; }
+
+const ODDS_DATE = '23 Jun 2026';
+let oddsLastFetched = null;
+const ESPN_TEAM = {
+  'South Korea':'Korea Republic',
+  'Ivory Coast':"Côte d'Ivoire",
+  'Iran':'IR Iran',
+  'Turkey':'Türkiye',
+  'Bosnia-Herzegovina':'Bosnia and Herzegovina',
+  'Bosnia & Herzegovina':'Bosnia and Herzegovina',
+  'Cape Verde':'Cabo Verde',
+  'DR Congo':'Congo DR',
+  'Democratic Republic of Congo':'Congo DR',
+  'Curacao':'Curaçao',
+};
+function espnName(n){ return ESPN_TEAM[n]||n; }
 
 const groups = {
   A:['Mexico','Czechia','South Africa','Korea Republic'],
@@ -264,7 +281,36 @@ function applyOddsDefaults(){
 }
 function save(){ localStorage.setItem('wc26-path-lab-v4', JSON.stringify({base,scores,knockoutPicks,selectedTeam:teamSelector?.value})); }
 function load(){ const raw=localStorage.getItem('wc26-path-lab-v4') || localStorage.getItem('wc26-path-lab-v3') || localStorage.getItem('wc26-path-lab-v2') || localStorage.getItem('wc26-path-lab'); if(raw){ try{const data=JSON.parse(raw); base=freshBase(); base={...base,...data.base}; scores=data.scores||{}; knockoutPicks=data.knockoutPicks||{}; if(data.selectedTeam) localStorage.setItem('wc26-selected-team', data.selectedTeam); return;}catch(e){} } applyCurrentBaseline(); applyOddsDefaults(); knockoutPicks={}; }
-function sample(){ applyCurrentBaseline(); applyOddsDefaults(); knockoutPicks={}; buildInputs(); renderAll(); save(); }
+async function sample(){
+  applyCurrentBaseline(); applyOddsDefaults(); knockoutPicks={};
+  document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=`Static defaults · ${ODDS_DATE} · Fetching live scores…`;el.style.color='var(--muted)';});
+  buildInputs(); renderAll(); save();
+  try{
+    const dates=['20260623','20260624','20260625','20260626','20260627'];
+    let count=0;
+    for(const d of dates){
+      const resp=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${d}`);
+      if(!resp.ok) continue;
+      const data=await resp.json();
+      for(const ev of(data.events||[])){
+        if(!ev.status?.type?.completed) continue;
+        const comp=ev.competitions?.[0]; if(!comp) continue;
+        const hc=comp.competitors?.find(c=>c.homeAway==='home');
+        const ac=comp.competitors?.find(c=>c.homeAway==='away');
+        if(!hc||!ac) continue;
+        const hn=espnName(hc.team.displayName), an=espnName(ac.team.displayName);
+        const k=resultKey(hn,an);
+        if(fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k)){scores[k]={h:+hc.score,a:+ac.score};count++;}
+      }
+    }
+    oddsLastFetched=new Date();
+    buildInputs(); renderAll(); save();
+    document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=`Live scores loaded · ${count} match${count===1?'':'es'} · ${oddsLastFetched.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`;el.style.color='var(--green)';});
+  }catch(e){
+    console.warn('ESPN fetch failed:',e);
+    document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=`Live fetch failed · static defaults (${ODDS_DATE})`;el.style.color='var(--red)';});
+  }
+}
 function resultKey(h,a){ return h+'|'+a; }
 function applyMatch(table, h, a, hs, as){ table[h].pld++; table[a].pld++; table[h].gf+=hs; table[h].ga+=as; table[a].gf+=as; table[a].ga+=hs; if(hs>as){table[h].pts+=3}else if(as>hs){table[a].pts+=3}else{table[h].pts++;table[a].pts++;} }
 function calculated(){ const table=JSON.parse(JSON.stringify(base)); fixtures.forEach(([date,g,h,a])=>{ const r=scores[resultKey(h,a)]; if(r && r.h!=='' && r.a!=='' && !Number.isNaN(+r.h) && !Number.isNaN(+r.a)) applyMatch(table,h,a,+r.h,+r.a); }); return table; }
@@ -482,6 +528,7 @@ function renderAll(){ renderTables(); renderPaths(); renderBracket(); }
 document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('.tab,.page').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); document.getElementById(btn.dataset.page).classList.add('active'); renderAll(); }));
 if(window.teamSelector) teamSelector.addEventListener('change',()=>{localStorage.setItem('wc26-selected-team', teamSelector.value); renderAll(); save();});
 saveBtn.addEventListener('click',save); resetBtn.addEventListener('click',()=>{localStorage.removeItem('wc26-path-lab-v4'); localStorage.removeItem('wc26-path-lab-v3'); localStorage.removeItem('wc26-path-lab-v2'); localStorage.removeItem('wc26-path-lab'); load(); buildInputs(); renderAll();}); sampleBtn.addEventListener('click',sample);
+document.getElementById('sampleBtn2')?.addEventListener('click',sample);
 load(); buildInputs(); renderAll();
 
 // Service worker registration
