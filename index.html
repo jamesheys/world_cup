@@ -105,6 +105,8 @@
       .fixture .home,.fixture .away{font-size:13px}
     }
 
+    .saveStatus{font-size:12px;color:var(--green);transition:opacity .5s;white-space:nowrap}
+
   </style>
 </head>
 <body>
@@ -132,7 +134,7 @@
       <div class="card twoThird">
         <div class="sectionTitle">
           <div><h2>Remaining group fixtures</h2><div class="muted">Completed matches load live results. Remaining fixtures default to market-implied favourites. Edit any predicted score.</div></div>
-          <div class="toolbar"><button class="primary" id="saveBtn">Save scenario</button><button class="secondary" id="sampleBtn">Load odds + live scores</button><button class="danger" id="resetBtn">Reset</button></div>
+          <div class="toolbar"><button class="secondary" id="sampleBtn">Load odds + live scores</button><button class="danger" id="resetBtn">Reset</button><span class="saveStatus" id="saveStatus"></span></div>
           <div class="oddsStatus muted small" style="margin-top:4px;width:100%"></div>
         </div>
         <div id="fixturesList"></div>
@@ -154,7 +156,7 @@
 
   <section id="tables" class="page">
     <div class="grid">
-      <div class="card"><div class="sectionTitle"><div><h2>Group tables</h2><div class="muted">Top two qualify automatically. The eight best third-placed teams also qualify.</div></div><button class="primary" onclick="renderAll()">Recalculate</button></div></div>
+      <div class="card"><div class="sectionTitle"><div><h2>Group tables</h2><div class="muted">Updates live from your fixture scores. Top two qualify automatically. Best eight third-placed teams also advance.</div></div></div></div>
       <div id="groupCards" class="grid" style="grid-column:span 12"></div>
       <div class="card"><h2>Third-place ranking</h2><div id="thirdTable"></div></div>
     </div>
@@ -280,7 +282,11 @@ function applyOddsDefaults(){
     'Panama|England':{h:0,a:3}, 'Croatia|Ghana':{h:1,a:1}, 'Algeria|Austria':{h:1,a:2}, 'Jordan|Argentina':{h:0,a:3}, 'Colombia|Portugal':{h:1,a:1}, 'Congo DR|Uzbekistan':{h:1,a:0}
   };
 }
-function save(){ localStorage.setItem('wc26-path-lab-v4', JSON.stringify({base,scores,knockoutPicks,selectedTeam:teamSelector?.value})); }
+function save(){
+  localStorage.setItem('wc26-path-lab-v4', JSON.stringify({base,scores,knockoutPicks,selectedTeam:teamSelector?.value}));
+  const el=document.getElementById('saveStatus');
+  if(el){ el.textContent='✓ Saved'; el.style.opacity='1'; clearTimeout(el._t); el._t=setTimeout(()=>{el.style.opacity='0';},2000); }
+}
 function load(){ const raw=localStorage.getItem('wc26-path-lab-v4') || localStorage.getItem('wc26-path-lab-v3') || localStorage.getItem('wc26-path-lab-v2') || localStorage.getItem('wc26-path-lab'); if(raw){ try{const data=JSON.parse(raw); base=freshBase(); base={...base,...data.base}; scores=data.scores||{}; knockoutPicks=data.knockoutPicks||{}; if(data.selectedTeam) localStorage.setItem('wc26-selected-team', data.selectedTeam); return;}catch(e){} } applyCurrentBaseline(); applyOddsDefaults(); knockoutPicks={}; }
 async function sample(){
   if(sampleRunning) return;
@@ -482,8 +488,14 @@ function buildInputs(){ const byDate={}; fixtures.forEach(f=>(byDate[f[0]]??=[])
   baseEditor.innerHTML=Object.entries(groups).map(([g,teams])=>`<div class="teamEdit"><strong>Group ${g}</strong>`+teams.map(t=>`<div style="margin:8px 0"><span class="team">${t}</span><br><label>Pld<input type="number" min="0" data-base="${t}" data-field="pld" value="${base[t].pld}"></label><label>Pts<input type="number" min="0" data-base="${t}" data-field="pts" value="${base[t].pts}"></label><label>GF<input type="number" min="0" data-base="${t}" data-field="gf" value="${base[t].gf}"></label><label>GA<input type="number" min="0" data-base="${t}" data-field="ga" value="${base[t].ga}"></label></div>`).join('')+`</div>`).join('');
   document.querySelectorAll('[data-base]').forEach(inp=>inp.addEventListener('input',e=>{ const t=e.target.dataset.base, f=e.target.dataset.field; base[t][f]=+e.target.value||0; renderAll(); save(); }));
 }
-function renderTables(){ const rg=rankedGroups(); groupCards.innerHTML=Object.entries(rg).map(([g,rows])=>`<div class="card third"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="background:var(--gold);color:#1e1600;font-weight:900;font-size:13px;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${g}</div><h3 style="margin:0">Group ${g}</h3></div><table><thead><tr><th>#</th><th>Team</th><th class="num">Pld</th><th class="num">GD</th><th class="num">Pts</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${i<2?'qualified':i===2?'thirdPlace':'eliminated'}"><td class="rank">${i+1}</td><td class="team">${withFlag(r.team)}</td><td class="num">${r.pld}</td><td class="num">${r.gd}</td><td class="num"><strong>${r.pts}</strong></td></tr>`).join('')}</tbody></table></div>`).join('');
-  const th=thirds(rg); thirdTable.innerHTML=`<table><thead><tr><th>#</th><th>Team</th><th>Group</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th>Status</th></tr></thead><tbody>${th.map((r,i)=>`<tr class="${i<8?'qualified':'eliminated'}"${i===7?' style="border-bottom:2px dashed rgba(32,201,151,.45)"':i===8?' style="opacity:.55"':''} ><td class="rank">${i+1}</td><td class="team">${withFlag(r.team)}</td><td>${r.group}</td><td class="num">${r.pts}</td><td class="num">${r.gd}</td><td class="num">${r.gf}</td><td>${i<8?'<span class="green">✓ Qualifies</span>':'Out'}</td></tr>`).join('')}</tbody></table>`;
+function renderTables(){
+  const gC=document.getElementById('groupCards');
+  const tT=document.getElementById('thirdTable');
+  if(!gC||!tT) return;
+  const rg=rankedGroups();
+  gC.innerHTML=Object.entries(rg).map(([g,rows])=>`<div class="card third"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="background:var(--gold);color:#1e1600;font-weight:900;font-size:13px;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${g}</div><h3 style="margin:0">Group ${g}</h3></div><table><thead><tr><th>#</th><th>Team</th><th class="num">Pld</th><th class="num">GD</th><th class="num">Pts</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${i<2?'qualified':i===2?'thirdPlace':'eliminated'}"><td class="rank">${i+1}</td><td class="team">${withFlag(r.team)}</td><td class="num">${r.pld}</td><td class="num">${r.gd}</td><td class="num"><strong>${r.pts}</strong></td></tr>`).join('')}</tbody></table></div>`).join('');
+  const th=thirds(rg);
+  tT.innerHTML=`<table><thead><tr><th>#</th><th>Team</th><th>Group</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th>Status</th></tr></thead><tbody>${th.map((r,i)=>`<tr class="${i<8?'qualified':'eliminated'}"${i===7?' style="border-bottom:2px dashed rgba(32,201,151,.45)"':i===8?' style="opacity:.55"':''} ><td class="rank">${i+1}</td><td class="team">${withFlag(r.team)}</td><td>${r.group}</td><td class="num">${r.pts}</td><td class="num">${r.gd}</td><td class="num">${r.gf}</td><td>${i<8?'<span class="green">✓ Qualifies</span>':'Out'}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function renderBracket(){
@@ -537,7 +549,7 @@ function renderBracket(){
 function renderAll(){ renderTeamSelector(); renderTables(); renderPaths(); renderBracket(); }
 document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('.tab,.page').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); document.getElementById(btn.dataset.page).classList.add('active'); renderAll(); }));
 if(window.teamSelector) teamSelector.addEventListener('change',()=>{localStorage.setItem('wc26-selected-team', teamSelector.value); renderAll(); save();});
-saveBtn.addEventListener('click',save); resetBtn.addEventListener('click',()=>{localStorage.removeItem('wc26-path-lab-v4'); localStorage.removeItem('wc26-path-lab-v3'); localStorage.removeItem('wc26-path-lab-v2'); localStorage.removeItem('wc26-path-lab'); load(); buildInputs(); renderAll();}); sampleBtn.addEventListener('click',()=>sample().catch(console.error));
+resetBtn.addEventListener('click',()=>{localStorage.removeItem('wc26-path-lab-v4'); localStorage.removeItem('wc26-path-lab-v3'); localStorage.removeItem('wc26-path-lab-v2'); localStorage.removeItem('wc26-path-lab'); load(); buildInputs(); renderAll();}); sampleBtn.addEventListener('click',()=>sample().catch(console.error));
 document.getElementById('sampleBtn2')?.addEventListener('click',()=>sample().catch(console.error));
 load(); buildInputs(); renderAll();
 
