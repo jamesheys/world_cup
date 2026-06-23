@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="ball" cx="38%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="42%" stop-color="#dbe8f4"/>
+      <stop offset="100%" stop-color="#87a9c5"/>
+    </radialGradient>
+  </defs>
+  <!-- Background circle (app bg colour) -->
+  <rect width="512" height="512" rx="112" fill="#071421"/>
+  <!-- Ball body -->
+  <circle cx="256" cy="256" r="196" fill="url(#ball)"/>
+  <!-- Pentagon centre -->
+  <polygon points="256,158 304,192 285,248 227,248 208,192" fill="#071421" opacity="0.85"/>
+  <!-- Surrounding hexagon patches -->
+  <polygon points="256,158 208,192 196,142 222,108 290,108 318,142 304,192" fill="none" stroke="#071421" stroke-width="7" opacity="0.6"/>
+  <polygon points="285,248 304,192 356,196 374,248 340,292 296,286" fill="none" stroke="#071421" stroke-width="7" opacity="0.6"/>
+  <polygon points="227,248 285,248 296,286 264,320 216,312 172,260" fill="none" stroke="#071421" stroke-width="7" opacity="0.6"/>
+  <polygon points="208,192 227,248 172,260 138,220 152,166 196,142" fill="none" stroke="#071421" stroke-width="7" opacity="0.6"/>
+  <!-- Shadow on ball -->
+  <circle cx="256" cy="256" r="196" fill="none" stroke="rgba(0,0,0,0.12)" stroke-width="30"/>
+</svg>
