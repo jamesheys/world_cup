@@ -255,7 +255,7 @@ function withFlag(t){ return t&&flags[t]?flags[t]+' '+t:t; }
 const ODDS_DATE = '23 Jun 2026';
 let oddsLastFetched = null;
 let sampleRunning = false;
-let oddsData = {}, availableBookies = {};
+let oddsData = {}, availableBookies = {}, confirmedFixtures = {};
 const ESPN_TEAM = {
   'South Korea':'Korea Republic',
   'Ivory Coast':"Côte d'Ivoire",
@@ -332,7 +332,7 @@ function applyOddsDefaults(){
   };
 }
 function save(){
-  localStorage.setItem('wc26-path-lab-v5', JSON.stringify({base,scores,knockoutPicks,selectedTeam:teamSelector?.value}));
+  localStorage.setItem('wc26-path-lab-v5', JSON.stringify({base,scores,knockoutPicks,confirmedFixtures,selectedTeam:teamSelector?.value}));
   const el=document.getElementById('saveStatus');
   if(el){ el.textContent='✓ Saved'; el.style.opacity='1'; clearTimeout(el._t); el._t=setTimeout(()=>{el.style.opacity='0';},2000); }
 }
@@ -340,6 +340,7 @@ function load(){
   applyCurrentBaseline();
   applyOddsDefaults();
   knockoutPicks={};
+  confirmedFixtures={};
   const rawV5=localStorage.getItem('wc26-path-lab-v5');
   const rawOld=!rawV5&&(localStorage.getItem('wc26-path-lab-v4')||localStorage.getItem('wc26-path-lab-v3')||localStorage.getItem('wc26-path-lab-v2')||localStorage.getItem('wc26-path-lab'));
   const raw=rawV5||rawOld;
@@ -350,6 +351,7 @@ function load(){
     if(rawV5&&data.base) Object.entries(data.base).forEach(([t,v])=>{ if(base[t]) Object.assign(base[t],v); });
     if(data.scores) Object.assign(scores,data.scores);
     knockoutPicks=data.knockoutPicks||{};
+    if(rawV5&&data.confirmedFixtures) Object.assign(confirmedFixtures,data.confirmedFixtures);
     if(data.selectedTeam) localStorage.setItem('wc26-selected-team',data.selectedTeam);
   }catch(e){}
 }
@@ -525,7 +527,7 @@ async function sample(){
         const isK1=fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k1);
         const isK2=!isK1&&fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k2);
         const k=isK1?k1:isK2?k2:null;
-        if(k){scores[k]=isK1?{h:hs,a:as2}:{h:as2,a:hs};count++;}
+        if(k){scores[k]=isK1?{h:hs,a:as2}:{h:as2,a:hs};count++;if(st?.completed)confirmedFixtures[k]=confirmedFixtures[k]||{confirmedAt:Date.now()};}
       }
     }
     oddsLastFetched=new Date();
@@ -695,17 +697,42 @@ function renderPaths(){
   }
   selectedPath.innerHTML=pathHTML(items);
 }
-function buildInputs(){ const byDate={}; fixtures.forEach(f=>(byDate[f[0]]??=[]).push(f)); fixturesList.innerHTML=Object.entries(byDate).map(([date,fs])=>`<div class="dateChip">${date}</div>`+fs.map(([d,g,h,a])=>{ const r=scores[resultKey(h,a)]||{h:'',a:''}; return `<div class="fixture"><div class="date">${d}</div><div class="home">${withFlag(h)}</div><div class="scorebox"><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="h" value="${r.h}"><span>–</span><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="a" value="${r.a}"></div><div class="away">${withFlag(a)}</div><div class="groupTag">Group ${g}</div>${oddsRowHTML(h,a)}</div>`}).join('')).join('');
+function buildInputs(){ const today=new Date().toISOString().slice(0,10); const nowMs=Date.now(); const vis=fixtures.filter(([d,,h,a])=>{ if(d<today) return false; const cf=confirmedFixtures[resultKey(h,a)]; if(d===today&&cf&&nowMs-cf.confirmedAt>=3600000) return false; return true; }); const byDate={}; vis.forEach(f=>(byDate[f[0]]??=[]).push(f)); fixturesList.innerHTML=Object.entries(byDate).map(([date,fs])=>`<div class="dateChip">${date}</div>`+fs.map(([d,g,h,a])=>{ const r=scores[resultKey(h,a)]||{h:'',a:''}; return `<div class="fixture"><div class="date">${d}</div><div class="home">${withFlag(h)}</div><div class="scorebox"><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="h" value="${r.h}"><span>–</span><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="a" value="${r.a}"></div><div class="away">${withFlag(a)}</div><div class="groupTag">Group ${g}</div>${oddsRowHTML(h,a)}</div>`}).join('')).join('');
   document.querySelectorAll('[data-score]').forEach(inp=>inp.addEventListener('input',e=>{ const k=e.target.dataset.score; scores[k]=scores[k]||{h:'',a:''}; scores[k][e.target.dataset.side]=e.target.value; renderTables(); save();}));
   baseEditor.innerHTML=Object.entries(groups).map(([g,teams])=>`<div class="teamEdit"><strong>Group ${g}</strong>`+teams.map(t=>`<div style="margin:8px 0"><span class="team">${t}</span><br><label>Pld<input type="number" min="0" data-base="${t}" data-field="pld" value="${base[t].pld}"></label><label>Pts<input type="number" min="0" data-base="${t}" data-field="pts" value="${base[t].pts}"></label><label>GF<input type="number" min="0" data-base="${t}" data-field="gf" value="${base[t].gf}"></label><label>GA<input type="number" min="0" data-base="${t}" data-field="ga" value="${base[t].ga}"></label></div>`).join('')+`</div>`).join('');
   document.querySelectorAll('[data-base]').forEach(inp=>inp.addEventListener('input',e=>{ const t=e.target.dataset.base, f=e.target.dataset.field; base[t][f]=+e.target.value||0; renderAll(); save(); }));
+}
+function groupConfirmations(g){
+  const teams=groups[g];
+  const gFix=fixtures.filter(([,grp])=>grp===g);
+  const locked=gFix.filter(([,,h,a])=>confirmedFixtures[resultKey(h,a)]);
+  const rem=gFix.filter(([,,h,a])=>!confirmedFixtures[resultKey(h,a)]);
+  function startTable(){
+    const t={};
+    teams.forEach(tm=>{t[tm]={...base[tm]};});
+    locked.forEach(([,,h,a])=>{ const r=scores[resultKey(h,a)]; if(r&&r.h!==''&&r.a!=='') applyMatch(t,h,a,+r.h,+r.a); });
+    return t;
+  }
+  function sortT(t){ return [...teams].map(tm=>({tm,p:t[tm]})).sort((x,y)=>(y.p.pts-x.p.pts)||((y.p.gf-y.p.ga)-(x.p.gf-x.p.ga))||(y.p.gf-x.p.gf)||x.tm.localeCompare(y.tm)); }
+  const minR={},maxR={};
+  teams.forEach(tm=>{minR[tm]=4;maxR[tm]=1;});
+  const OUTS=[[1,0],[1,1],[0,1]];
+  function enumerate(idx,table){
+    if(idx===rem.length){ sortT(table).forEach(({tm},i)=>{minR[tm]=Math.min(minR[tm],i+1);maxR[tm]=Math.max(maxR[tm],i+1);}); return; }
+    const [,,h,a]=rem[idx];
+    for(const [hs,as] of OUTS){ const t2=JSON.parse(JSON.stringify(table)); applyMatch(t2,h,a,hs,as); enumerate(idx+1,t2); }
+  }
+  enumerate(0,startTable());
+  const res={};
+  teams.forEach(tm=>{res[tm]={qualConfirmed:maxR[tm]<=2,elimConfirmed:minR[tm]>=3,posConfirmed:minR[tm]===maxR[tm]};});
+  return res;
 }
 function renderTables(){
   const gC=document.getElementById('groupCards');
   const tT=document.getElementById('thirdTable');
   if(!gC||!tT) return;
   const rg=rankedGroups();
-  gC.innerHTML=Object.entries(rg).map(([g,rows])=>`<div class="card third"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="background:var(--gold);color:#1e1600;font-weight:900;font-size:13px;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${g}</div><h3 style="margin:0">Group ${g}</h3></div><div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Team</th><th class="num">Pld</th><th class="num">W</th><th class="num">D</th><th class="num">L</th><th class="num">GD</th><th class="num">Pts</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="${i<2?'qualified':i===2?'thirdPlace':'eliminated'}"><td class="rank">${i+1}</td><td class="team">${withFlag(r.team)}</td><td class="num">${r.pld}</td><td class="num">${r.w}</td><td class="num">${r.d}</td><td class="num">${r.l}</td><td class="num">${r.gd}</td><td class="num"><strong>${r.pts}</strong></td></tr>`).join('')}</tbody></table></div></div>`).join('');
+  gC.innerHTML=Object.entries(rg).map(([g,rows])=>{ const conf=groupConfirmations(g); return `<div class="card third"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><div style="background:var(--gold);color:#1e1600;font-weight:900;font-size:13px;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${g}</div><h3 style="margin:0">Group ${g}</h3></div><div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Team</th><th class="num">Pld</th><th class="num">W</th><th class="num">D</th><th class="num">L</th><th class="num">GD</th><th class="num">Pts</th></tr></thead><tbody>${rows.map((r,i)=>{ const c=conf[r.team]||{}; const badge=c.qualConfirmed?`<span style="color:var(--green);font-size:10px;margin-left:3px;font-weight:900" title="Confirmed qualified">✓</span>`:c.elimConfirmed?`<span style="color:var(--red);font-size:10px;margin-left:3px;font-weight:900" title="Confirmed eliminated">✕</span>`:''; const rankHL=c.posConfirmed?` style="background:rgba(242,193,78,.22);border-radius:6px;color:var(--gold)"` :''; return `<tr class="${i<2?'qualified':i===2?'thirdPlace':'eliminated'}"><td class="rank"${rankHL}>${i+1}</td><td class="team">${withFlag(r.team)}${badge}</td><td class="num">${r.pld}</td><td class="num">${r.w}</td><td class="num">${r.d}</td><td class="num">${r.l}</td><td class="num">${r.gd}</td><td class="num"><strong>${r.pts}</strong></td></tr>`; }).join('')}</tbody></table></div></div>`; }).join('');
   const th=thirds(rg);
   tT.innerHTML=`<table><thead><tr><th>#</th><th>Team</th><th>Group</th><th class="num">Pts</th><th class="num">GD</th><th class="num">GF</th><th>Status</th></tr></thead><tbody>${th.map((r,i)=>`<tr class="${i<8?'qualified':'eliminated'}"${i===7?' style="border-bottom:2px dashed rgba(32,201,151,.45)"':i===8?' style="opacity:.55"':''} ><td class="rank">${i+1}</td><td class="team">${withFlag(r.team)}</td><td>${r.group}</td><td class="num">${r.pts}</td><td class="num">${r.gd}</td><td class="num">${r.gf}</td><td>${i<8?'<span class="green">✓ Qualifies</span>':'Out'}</td></tr>`).join('')}</tbody></table>`;
 }
