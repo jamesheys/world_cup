@@ -125,6 +125,7 @@
       <button class="tab" data-page="tables"><span class="tab-icon">📊</span>Tables</button>
       <button class="tab" data-page="paths"><span class="tab-icon">🗺️</span>Knockout</button>
       <button class="tab" data-page="bracket"><span class="tab-icon">🏆</span>Bracket</button>
+      <button class="tab" data-page="oddsview"><span class="tab-icon">📈</span>Odds</button>
     </nav>
   </div>
 </header>
@@ -134,7 +135,7 @@
       <div class="card twoThird">
         <div class="sectionTitle">
           <div><h2>Group fixtures</h2><div class="muted">Matchday 1 &amp; 2 results for most groups are already applied. Load live scores to fetch today's remaining results. Edit any score to adjust projections.</div></div>
-          <div class="toolbar"><button class="secondary" id="sampleBtn">Load odds + live scores</button><button class="danger" id="resetBtn">Reset</button><span class="saveStatus" id="saveStatus"></span></div>
+          <div class="toolbar"><button class="secondary" id="sampleBtn">Load odds + live scores</button><button class="secondary" id="settingsBtn" title="Odds API settings" style="font-size:18px;padding:8px 10px;line-height:1">⚙️</button><button class="danger" id="resetBtn">Reset</button><span class="saveStatus" id="saveStatus"></span></div>
           <div class="oddsStatus muted small" style="margin-top:4px;width:100%"></div>
         </div>
         <div id="fixturesList"></div>
@@ -197,8 +198,43 @@
       <div class="card"><div id="fullBracket"></div></div>
     </div>
   </section>
+  <section id="oddsview" class="page">
+    <div class="grid">
+      <div class="card">
+        <div class="sectionTitle">
+          <div><h2>Live odds</h2><div class="muted">Current odds from Australian bookmakers for upcoming fixtures. Add an API key in ⚙️ Settings to activate.</div></div>
+          <button class="secondary" id="sampleBtn3">Load odds + live scores</button>
+        </div>
+        <div id="oddsPage" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </section>
   <div class="footer">Fixture and bracket slot structure based on FIFA's published 2026 match schedule. Media route shorthand varies because third-place allocations remain conditional until the group stage is complete.</div>
 </main>
+<div id="settingsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.74);z-index:200;padding:20px;overflow-y:auto">
+  <div style="max-width:480px;margin:40px auto;background:var(--panel);border:1px solid rgba(255,255,255,.14);border-radius:20px;padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h3 style="margin:0">⚙️ Odds API settings</h3>
+      <button class="secondary" id="settingsClose" style="padding:8px 14px">✕</button>
+    </div>
+    <div style="margin-bottom:24px">
+      <h4 style="margin:0 0 6px;font-size:15px">🔑 API key</h4>
+      <p class="muted small" style="margin:0 0 10px">Get a free key at <strong>the-odds-api.com</strong> — 500 requests/month free. The key is stored only in your browser and sent only to The Odds API.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="apiKeyField" type="text" autocomplete="off" spellcheck="false" placeholder="Paste API key here…" style="flex:1;min-width:180px;padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:#071421;color:var(--text);font-size:13px">
+        <button class="primary" id="apiKeySaveBtn">Save</button>
+        <button class="secondary" id="apiKeyClearBtn">Clear</button>
+      </div>
+      <div id="apiKeyStatus" class="small" style="margin-top:7px;color:var(--green)"></div>
+    </div>
+    <div>
+      <h4 style="margin:0 0 6px;font-size:15px">📊 Bookmakers</h4>
+      <p class="muted small" style="margin:0 0 10px">Select which AU bookmakers to show odds from under each fixture. Score predictions average the implied probabilities across your selection. Load odds after saving your key to populate this list.</p>
+      <div id="bookieSelector" style="display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
+      <p class="muted small" style="margin:12px 0 0">Use the <strong>📈 Odds</strong> tab to see a full side-by-side odds comparison for all upcoming fixtures.</p>
+    </div>
+  </div>
+</div>
 <script>
 const flags={
   'Mexico':'🇲🇽','Czechia':'🇨🇿','South Africa':'🇿🇦','Korea Republic':'🇰🇷',
@@ -219,6 +255,7 @@ function withFlag(t){ return t&&flags[t]?flags[t]+' '+t:t; }
 const ODDS_DATE = '23 Jun 2026';
 let oddsLastFetched = null;
 let sampleRunning = false;
+let oddsData = {}, availableBookies = {};
 const ESPN_TEAM = {
   'South Korea':'Korea Republic',
   'Ivory Coast':"Côte d'Ivoire",
@@ -232,6 +269,18 @@ const ESPN_TEAM = {
   'Curacao':'Curaçao',
 };
 function espnName(n){ return ESPN_TEAM[n]||n; }
+const ODDS_TEAM={
+  'Ivory Coast':"Côte d'Ivoire",'Iran':'IR Iran','Turkey':'Türkiye','South Korea':'Korea Republic',
+  'Bosnia-Herzegovina':'Bosnia and Herzegovina','Bosnia & Herzegovina':'Bosnia and Herzegovina',
+  'Cape Verde':'Cabo Verde','DR Congo':'Congo DR','Democratic Republic of Congo':'Congo DR','Curacao':'Curaçao'
+};
+function oddsTeamName(n){ return ODDS_TEAM[n]||n; }
+const BOOKIE_NAMES={
+  'sportsbet':'Sportsbet','tab':'TAB','unibet_au':'Unibet','bet365':'Bet365',
+  'pointsbet_au':'PointsBet','ladbrokes_au':'Ladbrokes','neds':'Neds',
+  'betright':'BetRight','betfair_ex_au':'Betfair','topsport':'TopSport','boombet':'Boombet'
+};
+function oddsToScore(ph,pd,pa){ if(pd>=ph&&pd>=pa)return{h:1,a:1}; if(ph>pa)return ph>0.60?{h:2,a:0}:{h:1,a:0}; return pa>0.60?{h:0,a:2}:{h:0,a:1}; }
 
 const groups = {
   A:['Mexico','Czechia','South Africa','Korea Republic'],
@@ -304,30 +353,167 @@ function load(){
     if(data.selectedTeam) localStorage.setItem('wc26-selected-team',data.selectedTeam);
   }catch(e){}
 }
+async function fetchOddsApi(apiKey){
+  const r=await fetch(`https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/odds/?apiKey=${encodeURIComponent(apiKey)}&regions=au&markets=h2h&oddsFormat=decimal`).catch(()=>null);
+  if(!r) return{ok:false,status:0,remaining:null};
+  const remaining=r.headers.get('X-Requests-Remaining');
+  if(!r.ok) return{ok:false,status:r.status,remaining:remaining?+remaining:null};
+  const data=await r.json().catch(()=>null);
+  if(!Array.isArray(data)) return{ok:false,status:200,remaining:null};
+  fixtures.forEach(([,,h,a])=>{ delete oddsData[resultKey(h,a)]; });
+  let count=0;
+  for(const match of data){
+    const ht=oddsTeamName(match.home_team), at=oddsTeamName(match.away_team);
+    const k1=resultKey(ht,at), k2=resultKey(at,ht);
+    const isK1=fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k1);
+    const isK2=!isK1&&fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k2);
+    if(!isK1&&!isK2) continue;
+    const k=isK1?k1:k2;
+    const bookmakers=[]; let sumPH=0,sumPD=0,sumPA=0,n=0;
+    for(const bk of(match.bookmakers||[])){
+      const mkt=bk.markets?.find(m=>m.key==='h2h'); if(!mkt) continue;
+      const ho=mkt.outcomes.find(o=>o.name===match.home_team);
+      const dr=mkt.outcomes.find(o=>o.name==='Draw');
+      const ao=mkt.outcomes.find(o=>o.name===match.away_team);
+      if(!ho||!dr||!ao||!ho.price||!dr.price||!ao.price) continue;
+      const [bh,bd,ba]=isK1?[ho.price,dr.price,ao.price]:[ao.price,dr.price,ho.price];
+      bookmakers.push({key:bk.key,title:BOOKIE_NAMES[bk.key]||bk.title,h:bh,d:bd,a:ba});
+      availableBookies[bk.key]=BOOKIE_NAMES[bk.key]||bk.title;
+      sumPH+=1/bh; sumPD+=1/bd; sumPA+=1/ba; n++;
+    }
+    oddsData[k]={bookmakers};
+    if(!n) continue;
+    const selKeys=JSON.parse(localStorage.getItem('odds-bookies')||'null');
+    let ph=sumPH,pd=sumPD,pa=sumPA;
+    if(selKeys){
+      let sPH=0,sPD=0,sPA=0,sN=0;
+      bookmakers.filter(b=>selKeys.includes(b.key)).forEach(b=>{sPH+=1/b.h;sPD+=1/b.d;sPA+=1/b.a;sN++;});
+      if(sN){ph=sPH;pd=sPD;pa=sPA;}
+    }
+    const tot=ph+pd+pa;
+    scores[k]=oddsToScore(ph/tot,pd/tot,pa/tot);
+    count++;
+  }
+  return{ok:true,count,remaining:remaining?+remaining:null};
+}
+function oddsRowHTML(h,a){
+  const k=resultKey(h,a);
+  const d=oddsData[k];
+  if(!d||!d.bookmakers.length) return '';
+  const selKeys=JSON.parse(localStorage.getItem('odds-bookies')||'null');
+  const bks=selKeys?d.bookmakers.filter(b=>selKeys.includes(b.key)):d.bookmakers;
+  if(!bks.length) return '';
+  return `<div style="grid-column:1/-1;overflow-x:auto;padding:4px 0 2px;border-top:1px solid rgba(255,255,255,.08);margin-top:4px">`+
+    `<div style="display:grid;grid-template-columns:76px 1fr 1fr 1fr;gap:2px;padding:0 0 2px;font-size:9px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase"><span></span><span style="text-align:right">Home</span><span style="text-align:center">Draw</span><span>Away</span></div>`+
+    bks.map(b=>{
+      const min=Math.min(b.h,b.d,b.a);
+      const c=x=>x===min?'var(--gold)':'var(--muted)';
+      const w=x=>x===min?900:400;
+      return `<div style="display:grid;grid-template-columns:76px 1fr 1fr 1fr;gap:2px;padding:2px 0;font-size:11px;align-items:center">`+
+        `<span style="color:var(--muted);font-weight:800;font-size:10px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.title}</span>`+
+        `<span style="text-align:right;color:${c(b.h)};font-weight:${w(b.h)}">${b.h.toFixed(2)}</span>`+
+        `<span style="text-align:center;color:${c(b.d)};font-weight:${w(b.d)}">${b.d.toFixed(2)}</span>`+
+        `<span style="color:${c(b.a)};font-weight:${w(b.a)}">${b.a.toFixed(2)}</span></div>`;
+    }).join('')+`</div>`;
+}
+function updateSettingsUI(){
+  const key=localStorage.getItem('odds-api-key');
+  const st=document.getElementById('apiKeyStatus');
+  const field=document.getElementById('apiKeyField');
+  if(st) st.textContent=key?'● Key saved · click Load odds to fetch bookmaker odds':'';
+  if(field&&key&&!field.value) field.value=key;
+  renderBookieSelector();
+}
+function renderBookieSelector(){
+  const container=document.getElementById('bookieSelector');
+  if(!container) return;
+  const bkMap={...BOOKIE_NAMES,...availableBookies};
+  const savedSel=JSON.parse(localStorage.getItem('odds-bookies')||'null');
+  const entries=Object.entries(bkMap);
+  if(!entries.length){
+    container.innerHTML='<p class="muted small" style="grid-column:1/-1">Load odds to populate the bookmaker list.</p>';
+    return;
+  }
+  container.innerHTML=entries.map(([k,name])=>{
+    const checked=!savedSel||savedSel.includes(k);
+    return `<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid rgba(255,255,255,.10);border-radius:10px;cursor:pointer;background:rgba(255,255,255,.04)"><input type="checkbox" data-bookie="${k}" ${checked?'checked':''} style="width:16px;height:16px;cursor:pointer;flex-shrink:0"><span style="font-weight:700;font-size:13px">${name}</span></label>`;
+  }).join('');
+  container.querySelectorAll('[data-bookie]').forEach(cb=>cb.addEventListener('change',()=>{
+    const all=[...container.querySelectorAll('[data-bookie]')];
+    const selected=all.filter(c=>c.checked).map(c=>c.dataset.bookie);
+    localStorage.setItem('odds-bookies',JSON.stringify(selected));
+    buildInputs(); renderOddsPage();
+  }));
+}
+function renderOddsPage(){
+  const el=document.getElementById('oddsPage');
+  if(!el) return;
+  const key=localStorage.getItem('odds-api-key');
+  if(!key){
+    el.innerHTML='<p class="muted">Add an API key in <strong>⚙️ Settings</strong> (gear icon on the Fixtures tab) to fetch live odds from Australian bookmakers.</p>';
+    return;
+  }
+  const fixturesWithOdds=fixtures.filter(([,,h,a])=>oddsData[resultKey(h,a)]);
+  if(!fixturesWithOdds.length){
+    el.innerHTML='<p class="muted">No odds loaded yet. Click <strong>Load odds + live scores</strong> to fetch current bookmaker odds.</p>';
+    return;
+  }
+  const selKeys=JSON.parse(localStorage.getItem('odds-bookies')||'null');
+  const allBkKeys=[...new Set(fixturesWithOdds.flatMap(([,,h,a])=>(oddsData[resultKey(h,a)]?.bookmakers||[]).map(b=>b.key)))].filter(k=>!selKeys||selKeys.includes(k));
+  if(!allBkKeys.length){
+    el.innerHTML='<p class="muted">No bookmakers selected. Open ⚙️ Settings and select at least one bookmaker.</p>';
+    return;
+  }
+  const bkHeaders=allBkKeys.map(k=>`<th colspan="3" style="text-align:center;white-space:nowrap;padding:8px 4px;font-size:11px;border-bottom:1px solid rgba(255,255,255,.12)">${availableBookies[k]||BOOKIE_NAMES[k]||k}</th>`).join('');
+  const subH=allBkKeys.map(()=>`<th class="num" style="font-size:10px;padding:4px;color:var(--muted)">H</th><th class="num" style="font-size:10px;padding:4px;color:var(--muted);text-align:center">D</th><th class="num" style="font-size:10px;padding:4px;color:var(--muted)">A</th>`).join('');
+  const byDate={};
+  fixturesWithOdds.forEach(f=>{ (byDate[f[0]]=byDate[f[0]]||[]).push(f); });
+  const rows=Object.entries(byDate).map(([date,fs])=>
+    fs.map(([d,g,h,a])=>{
+      const k=resultKey(h,a); const od=oddsData[k]; if(!od) return '';
+      const cells=allBkKeys.map(bkKey=>{
+        const bk=od.bookmakers.find(b=>b.key===bkKey);
+        if(!bk) return `<td colspan="3" style="text-align:center;color:var(--muted);font-size:11px">—</td>`;
+        const min=Math.min(bk.h,bk.d,bk.a);
+        const s=x=>x===min?` style="color:var(--gold);font-weight:900;font-size:12px;padding:6px 3px"`:`  style="color:var(--muted);font-size:12px;padding:6px 3px"`;
+        return `<td class="num"${s(bk.h)}>${bk.h.toFixed(2)}</td><td${s(bk.d)} style="text-align:center;font-size:12px;padding:6px 3px${min===bk.d?';color:var(--gold);font-weight:900':';color:var(--muted)'}">${bk.d.toFixed(2)}</td><td${s(bk.a)}>${bk.a.toFixed(2)}</td>`;
+      }).join('');
+      return `<tr><td style="white-space:nowrap;font-size:12px;color:var(--muted);padding:8px 6px">${d}</td><td><span class="groupTag" style="font-size:10px;padding:2px 6px">G${g}</span></td><td style="font-weight:800;font-size:13px;padding:8px 6px">${withFlag(h)}</td><td style="text-align:center;color:var(--muted);font-weight:900;padding:8px 2px">v</td><td style="font-weight:800;font-size:13px;padding:8px 6px">${withFlag(a)}</td>${cells}</tr>`;
+    }).join('')
+  ).join('');
+  el.innerHTML=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table><thead><tr><th colspan="5"></th>${bkHeaders}</tr><tr><th>Date</th><th>Grp</th><th>Home</th><th></th><th>Away</th>${subH}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
 async function sample(){
   if(sampleRunning) return;
   sampleRunning=true;
   applyCurrentBaseline(); applyOddsDefaults();
-  document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=`Static defaults · ${ODDS_DATE} · Fetching live scores…`;el.style.color='var(--muted)';});
+  document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent='Fetching…';el.style.color='var(--muted)';});
   buildInputs(); renderAll(); save();
+  const parts=[]; let col='var(--muted)';
   try{
+    const apiKey=localStorage.getItem('odds-api-key');
+    if(apiKey){
+      try{
+        const res=await fetchOddsApi(apiKey);
+        const rem=res.remaining!=null?` · ${res.remaining} req left`:'';
+        if(res.ok&&res.count>0){parts.push(`🔑 ${res.count} odds${rem}`);col='var(--blue)';}
+        else if(res.ok){parts.push(`🔑 connected, no upcoming odds${rem}`);}
+        else{const e={0:'network error',401:'invalid key',402:'quota exceeded',422:'quota exceeded',429:'rate limited'};parts.push(`🔑 Odds API: ${e[res.status]||'error '+res.status}${rem} · using static defaults`);col='var(--red)';}
+      }catch(e){console.warn('Odds API:',e);parts.push('🔑 Odds API unavailable');}
+    }
     const dates=['20260623','20260624','20260625','20260626','20260627'];
     let apiOk=false;
     const fetched=await Promise.allSettled(
       dates.map(d=>fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${d}`)
-        .then(r=>{
-          if(r.ok){apiOk=true; return r.json().catch(()=>null);}
-          console.warn('ESPN HTTP',r.status,'for date',d);
-          return null;
-        }).catch(e=>{console.warn('ESPN fetch error:',e); return null;}))
+        .then(r=>{if(r.ok){apiOk=true;return r.json().catch(()=>null);}console.warn('ESPN HTTP',r.status,d);return null;})
+        .catch(e=>{console.warn('ESPN:',e);return null;}))
     );
     let count=0;
     for(const res of fetched){
       if(res.status!=='fulfilled'||!res.value) continue;
       for(const ev of(res.value.events||[])){
         const st=ev.status?.type;
-        // Accept completed games, in-progress games, and post-game state
-        if(!st?.completed && st?.state!=='in' && st?.state!=='post') continue;
+        if(!st?.completed&&st?.state!=='in'&&st?.state!=='post') continue;
         const comp=ev.competitions?.[0]; if(!comp) continue;
         const hc=comp.competitors?.find(c=>c.homeAway==='home');
         const ac=comp.competitors?.find(c=>c.homeAway==='away');
@@ -343,25 +529,17 @@ async function sample(){
       }
     }
     oddsLastFetched=new Date();
-    buildInputs(); renderAll(); save();
-    let msg, col;
-    if(count){
-      msg=`Live scores loaded · ${count} match${count===1?'':'es'} · ${oddsLastFetched.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`;
-      col='var(--green)';
-    }else if(apiOk){
-      msg=`API connected · no live/finished matches yet · static defaults (${ODDS_DATE})`;
-      col='var(--muted)';
-    }else{
-      msg=`Live data unavailable · static defaults (${ODDS_DATE})`;
-      col='var(--red)';
-    }
-    document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=msg;el.style.color=col;});
+    if(count){parts.push(`Live: ${count} result${count===1?'':'s'} · ${oddsLastFetched.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`);col='var(--green)';}
+    else if(apiOk){parts.push('ESPN: no results yet');}
+    else if(!parts.length){parts.push(`Static defaults · ${ODDS_DATE}`);}
   }catch(e){
-    console.warn('ESPN fetch failed:',e);
-    document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=`Live fetch failed · static defaults (${ODDS_DATE})`;el.style.color='var(--red)';});
+    console.warn('sample() error:',e);
+    if(!parts.length) parts.push(`Static defaults · ${ODDS_DATE}`);
   }finally{
     sampleRunning=false;
   }
+  buildInputs(); renderAll(); save();
+  document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=parts.join(' · ')||`Static defaults · ${ODDS_DATE}`;el.style.color=col;});
 }
 function resultKey(h,a){ return h+'|'+a; }
 function applyMatch(table, h, a, hs, as){ table[h].pld++; table[a].pld++; table[h].gf+=hs; table[h].ga+=as; table[a].gf+=as; table[a].ga+=hs; if(hs>as){table[h].pts+=3;table[h].w++;table[a].l++;}else if(as>hs){table[a].pts+=3;table[a].w++;table[h].l++;}else{table[h].pts++;table[a].pts++;table[h].d++;table[a].d++;} }
@@ -517,7 +695,7 @@ function renderPaths(){
   }
   selectedPath.innerHTML=pathHTML(items);
 }
-function buildInputs(){ const byDate={}; fixtures.forEach(f=>(byDate[f[0]]??=[]).push(f)); fixturesList.innerHTML=Object.entries(byDate).map(([date,fs])=>`<div class="dateChip">${date}</div>`+fs.map(([d,g,h,a])=>{ const r=scores[resultKey(h,a)]||{h:'',a:''}; return `<div class="fixture"><div class="date">${d}</div><div class="home">${withFlag(h)}</div><div class="scorebox"><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="h" value="${r.h}"><span>–</span><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="a" value="${r.a}"></div><div class="away">${withFlag(a)}</div><div class="groupTag">Group ${g}</div></div>`}).join('')).join('');
+function buildInputs(){ const byDate={}; fixtures.forEach(f=>(byDate[f[0]]??=[]).push(f)); fixturesList.innerHTML=Object.entries(byDate).map(([date,fs])=>`<div class="dateChip">${date}</div>`+fs.map(([d,g,h,a])=>{ const r=scores[resultKey(h,a)]||{h:'',a:''}; return `<div class="fixture"><div class="date">${d}</div><div class="home">${withFlag(h)}</div><div class="scorebox"><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="h" value="${r.h}"><span>–</span><input type="number" min="0" data-score="${resultKey(h,a)}" data-side="a" value="${r.a}"></div><div class="away">${withFlag(a)}</div><div class="groupTag">Group ${g}</div>${oddsRowHTML(h,a)}</div>`}).join('')).join('');
   document.querySelectorAll('[data-score]').forEach(inp=>inp.addEventListener('input',e=>{ const k=e.target.dataset.score; scores[k]=scores[k]||{h:'',a:''}; scores[k][e.target.dataset.side]=e.target.value; renderTables(); save();}));
   baseEditor.innerHTML=Object.entries(groups).map(([g,teams])=>`<div class="teamEdit"><strong>Group ${g}</strong>`+teams.map(t=>`<div style="margin:8px 0"><span class="team">${t}</span><br><label>Pld<input type="number" min="0" data-base="${t}" data-field="pld" value="${base[t].pld}"></label><label>Pts<input type="number" min="0" data-base="${t}" data-field="pts" value="${base[t].pts}"></label><label>GF<input type="number" min="0" data-base="${t}" data-field="gf" value="${base[t].gf}"></label><label>GA<input type="number" min="0" data-base="${t}" data-field="ga" value="${base[t].ga}"></label></div>`).join('')+`</div>`).join('');
   document.querySelectorAll('[data-base]').forEach(inp=>inp.addEventListener('input',e=>{ const t=e.target.dataset.base, f=e.target.dataset.field; base[t][f]=+e.target.value||0; renderAll(); save(); }));
@@ -580,12 +758,27 @@ function renderBracket(){
 
   fullBracket.innerHTML=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding:4px 0 8px"><div style="display:inline-flex;flex-direction:column;min-width:max-content"><div style="display:flex">${labelRow}</div><div style="display:flex">${matchRow}</div></div></div>`;
 }
-function renderAll(){ renderTables(); renderPaths(); renderBracket(); }
+function renderAll(){ renderTables(); renderPaths(); renderBracket(); renderOddsPage(); }
 document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('.tab,.page').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); document.getElementById(btn.dataset.page).classList.add('active'); renderAll(); }));
 if(window.teamSelector) teamSelector.addEventListener('change',()=>{localStorage.setItem('wc26-selected-team', teamSelector.value); renderAll(); save();});
-resetBtn.addEventListener('click',()=>{localStorage.removeItem('wc26-path-lab-v5'); localStorage.removeItem('wc26-path-lab-v4'); localStorage.removeItem('wc26-path-lab-v3'); localStorage.removeItem('wc26-path-lab-v2'); localStorage.removeItem('wc26-path-lab'); load(); buildInputs(); renderAll();}); sampleBtn.addEventListener('click',()=>sample().catch(console.error));
+resetBtn.addEventListener('click',()=>{localStorage.removeItem('wc26-path-lab-v5'); localStorage.removeItem('wc26-path-lab-v4'); localStorage.removeItem('wc26-path-lab-v3'); localStorage.removeItem('wc26-path-lab-v2'); localStorage.removeItem('wc26-path-lab'); oddsData={}; load(); buildInputs(); renderAll();}); sampleBtn.addEventListener('click',()=>sample().catch(console.error));
 document.getElementById('sampleBtn2')?.addEventListener('click',()=>sample().catch(console.error));
-load(); buildInputs(); renderAll();
+document.getElementById('sampleBtn3')?.addEventListener('click',()=>sample().catch(console.error));
+document.getElementById('settingsBtn')?.addEventListener('click',()=>{ document.getElementById('settingsModal').style.display='block'; updateSettingsUI(); });
+document.getElementById('settingsClose')?.addEventListener('click',()=>{ document.getElementById('settingsModal').style.display='none'; });
+document.getElementById('settingsModal')?.addEventListener('click',e=>{ if(e.target===document.getElementById('settingsModal')) document.getElementById('settingsModal').style.display='none'; });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') document.getElementById('settingsModal').style.display='none'; });
+document.getElementById('apiKeySaveBtn')?.addEventListener('click',()=>{
+  const k=document.getElementById('apiKeyField')?.value?.trim();
+  if(k){ localStorage.setItem('odds-api-key',k); updateSettingsUI(); }
+});
+document.getElementById('apiKeyClearBtn')?.addEventListener('click',()=>{
+  localStorage.removeItem('odds-api-key');
+  const f=document.getElementById('apiKeyField'); if(f)f.value='';
+  oddsData={}; availableBookies={};
+  updateSettingsUI(); buildInputs(); renderOddsPage();
+});
+load(); buildInputs(); renderAll(); updateSettingsUI();
 
 // Service worker registration
 if ('serviceWorker' in navigator) {
