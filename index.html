@@ -541,6 +541,7 @@ async function sample(){
     sampleRunning=false;
   }
   buildInputs(); renderAll(); save();
+  if(Object.keys(oddsData).length) localStorage.setItem('wc26-odds-data-v1',JSON.stringify({oddsData,availableBookies}));
   document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=parts.join(' · ')||`Static defaults · ${ODDS_DATE}`;el.style.color=col;});
 }
 function resultKey(h,a){ return h+'|'+a; }
@@ -800,12 +801,14 @@ document.getElementById('apiKeySaveBtn')?.addEventListener('click',()=>{
   if(k){ localStorage.setItem('odds-api-key',k); updateSettingsUI(); }
 });
 document.getElementById('apiKeyClearBtn')?.addEventListener('click',()=>{
-  localStorage.removeItem('odds-api-key');
+  localStorage.removeItem('odds-api-key'); localStorage.removeItem('wc26-odds-data-v1');
   const f=document.getElementById('apiKeyField'); if(f)f.value='';
   oddsData={}; availableBookies={};
   updateSettingsUI(); buildInputs(); renderOddsPage();
 });
-load(); buildInputs(); renderAll(); updateSettingsUI();
+load();
+try{ const _od=JSON.parse(localStorage.getItem('wc26-odds-data-v1')||'null'); if(_od){oddsData=_od.oddsData||{};availableBookies=_od.availableBookies||{};} }catch(e){}
+buildInputs(); renderAll(); updateSettingsUI();
 
 // Service worker registration
 if ('serviceWorker' in navigator) {
