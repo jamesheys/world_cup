@@ -135,7 +135,7 @@
       <div class="card twoThird">
         <div class="sectionTitle">
           <div><h2>Group fixtures</h2><div class="muted">Matchday 1 &amp; 2 results for most groups are already applied. Load live scores to fetch today's remaining results. Edit any score to adjust projections.</div></div>
-          <div class="toolbar"><button class="secondary" id="sampleBtn">Load odds + live scores</button><button class="secondary" id="settingsBtn" title="Odds API settings" style="font-size:18px;padding:8px 10px;line-height:1">⚙️</button><button class="danger" id="resetBtn">Reset</button><span class="saveStatus" id="saveStatus"></span></div>
+          <div class="toolbar"><button class="secondary" id="sampleBtn">Load odds</button><button class="secondary" id="liveBtn">⚡ Live scores</button><button class="secondary" id="settingsBtn" title="Odds API settings" style="font-size:18px;padding:8px 10px;line-height:1">⚙️</button><button class="danger" id="resetBtn">Reset</button><span class="saveStatus" id="saveStatus"></span></div>
           <div class="oddsStatus muted small" style="margin-top:4px;width:100%"></div>
         </div>
         <div id="fixturesList"></div>
@@ -166,7 +166,7 @@
   <section id="paths" class="page">
     <div class="grid">
       <div class="card">
-        <div class="sectionTitle"><div><h2>Knockout Stages</h2><div class="muted">Default view projects winners based on the odds defaults. Select a team to follow their path through to the Final, or adjust individual match outcomes below.</div></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0"><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button class="secondary" id="sampleBtn2">Load odds + live scores</button><button class="primary" onclick="renderAll()">Refresh</button></div><div class="oddsStatus muted small" style="text-align:right"></div></div></div>
+        <div class="sectionTitle"><div><h2>Knockout Stages</h2><div class="muted">Default view projects winners based on the odds defaults. Select a team to follow their path through to the Final, or adjust individual match outcomes below.</div></div><div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;flex-shrink:0"><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button class="secondary" id="sampleBtn2">Load odds</button><button class="secondary" id="liveBtn2">⚡ Live scores</button><button class="primary" onclick="renderAll()">Refresh</button></div><div class="oddsStatus muted small" style="text-align:right"></div></div></div>
         <div class="selectorRow">
           <label for="teamSelector">Team</label>
           <select id="teamSelector" class="selectish"></select>
@@ -203,7 +203,7 @@
       <div class="card">
         <div class="sectionTitle">
           <div><h2>Live odds</h2><div class="muted">Current odds from Australian bookmakers for upcoming fixtures. Add an API key in ⚙️ Settings to activate.</div></div>
-          <button class="secondary" id="sampleBtn3">Load odds + live scores</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="secondary" id="sampleBtn3">Load odds</button><button class="secondary" id="liveBtn3">⚡ Live scores</button></div>
         </div>
         <div id="oddsPage" style="margin-top:12px"></div>
       </div>
@@ -546,6 +546,48 @@ async function sample(){
   if(Object.keys(oddsData).length) localStorage.setItem('wc26-odds-data-v1',JSON.stringify({oddsData,availableBookies}));
   document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=parts.join(' · ')||`Static defaults · ${ODDS_DATE}`;el.style.color=col;});
 }
+async function refreshScores(){
+  if(sampleRunning) return;
+  sampleRunning=true;
+  document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent='Fetching live scores…';el.style.color='var(--muted)';});
+  const parts=[]; let col='var(--muted)';
+  try{
+    const dates=['20260623','20260624','20260625','20260626','20260627'];
+    let apiOk=false;
+    const fetched=await Promise.allSettled(
+      dates.map(d=>fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${d}`)
+        .then(r=>{if(r.ok){apiOk=true;return r.json().catch(()=>null);}return null;})
+        .catch(()=>null))
+    );
+    let count=0;
+    for(const res of fetched){
+      if(res.status!=='fulfilled'||!res.value) continue;
+      for(const ev of(res.value.events||[])){
+        const st=ev.status?.type;
+        if(!st?.completed&&st?.state!=='in'&&st?.state!=='post') continue;
+        const comp=ev.competitions?.[0]; if(!comp) continue;
+        const hc=comp.competitors?.find(c=>c.homeAway==='home');
+        const ac=comp.competitors?.find(c=>c.homeAway==='away');
+        if(!hc||!ac) continue;
+        const hn=espnName(hc.team.displayName), an=espnName(ac.team.displayName);
+        const hs=+hc.score, as2=+ac.score;
+        if(Number.isNaN(hs)||Number.isNaN(as2)) continue;
+        const k1=resultKey(hn,an), k2=resultKey(an,hn);
+        const isK1=fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k1);
+        const isK2=!isK1&&fixtures.some(([,,fh,fa])=>resultKey(fh,fa)===k2);
+        const k=isK1?k1:isK2?k2:null;
+        if(k){scores[k]=isK1?{h:hs,a:as2}:{h:as2,a:hs};count++;if(st?.completed)confirmedFixtures[k]=confirmedFixtures[k]||{confirmedAt:Date.now()};}
+      }
+    }
+    const now=new Date();
+    if(count){parts.push(`Live: ${count} result${count===1?'':'s'} · ${now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`);col='var(--green)';}
+    else if(apiOk){parts.push('ESPN: no results yet');}
+    else{parts.push('ESPN: unavailable');}
+  }catch(e){console.warn('refreshScores:',e);parts.push('Score fetch failed');}
+  finally{sampleRunning=false;}
+  buildInputs(); renderAll(); save();
+  document.querySelectorAll('.oddsStatus').forEach(el=>{el.textContent=parts.join(' · ');el.style.color=col;});
+}
 function resultKey(h,a){ return h+'|'+a; }
 function applyMatch(table, h, a, hs, as){ table[h].pld++; table[a].pld++; table[h].gf+=hs; table[h].ga+=as; table[a].gf+=as; table[a].ga+=hs; if(hs>as){table[h].pts+=3;table[h].w++;table[a].l++;}else if(as>hs){table[a].pts+=3;table[a].w++;table[h].l++;}else{table[h].pts++;table[a].pts++;table[h].d++;table[a].d++;} }
 function calculated(){ const table=JSON.parse(JSON.stringify(base)); fixtures.forEach(([date,g,h,a])=>{ const r=scores[resultKey(h,a)]; if(r && r.h!=='' && r.a!=='' && !Number.isNaN(+r.h) && !Number.isNaN(+r.a)) applyMatch(table,h,a,+r.h,+r.a); }); return table; }
@@ -792,8 +834,11 @@ function renderAll(){ renderTables(); renderPaths(); renderBracket(); renderOdds
 document.querySelectorAll('.tab').forEach(btn=>btn.addEventListener('click',()=>{ document.querySelectorAll('.tab,.page').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); document.getElementById(btn.dataset.page).classList.add('active'); renderAll(); }));
 if(window.teamSelector) teamSelector.addEventListener('change',()=>{localStorage.setItem('wc26-selected-team', teamSelector.value); renderAll(); save();});
 resetBtn.addEventListener('click',()=>{localStorage.removeItem('wc26-path-lab-v5'); localStorage.removeItem('wc26-path-lab-v4'); localStorage.removeItem('wc26-path-lab-v3'); localStorage.removeItem('wc26-path-lab-v2'); localStorage.removeItem('wc26-path-lab'); oddsData={}; load(); buildInputs(); renderAll();}); sampleBtn.addEventListener('click',()=>sample().catch(console.error));
+document.getElementById('liveBtn')?.addEventListener('click',()=>refreshScores().catch(console.error));
 document.getElementById('sampleBtn2')?.addEventListener('click',()=>sample().catch(console.error));
+document.getElementById('liveBtn2')?.addEventListener('click',()=>refreshScores().catch(console.error));
 document.getElementById('sampleBtn3')?.addEventListener('click',()=>sample().catch(console.error));
+document.getElementById('liveBtn3')?.addEventListener('click',()=>refreshScores().catch(console.error));
 document.getElementById('settingsBtn')?.addEventListener('click',()=>{ document.getElementById('settingsModal').style.display='block'; updateSettingsUI(); });
 document.getElementById('settingsClose')?.addEventListener('click',()=>{ document.getElementById('settingsModal').style.display='none'; });
 document.getElementById('settingsModal')?.addEventListener('click',e=>{ if(e.target===document.getElementById('settingsModal')) document.getElementById('settingsModal').style.display='none'; });
